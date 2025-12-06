@@ -3,6 +3,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Message } from '../types';
 import { Send, Bot, Loader2, Mic, CameraOff, MessageSquare, Headphones, Eye, Aperture, X, Play } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { playTextToSpeech } from '../services/elevenLabsService';
 
 interface ChatInterfaceProps {
   messages: Message[];
@@ -20,6 +21,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
   const [isListening, setIsListening] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [voiceSessionStarted, setVoiceSessionStarted] = useState(false);
+  const [lastSpokenMessageId, setLastSpokenMessageId] = useState<string | null>(null);
   
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -78,7 +80,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
         streamRef.current = null;
     }
   };
+  // --- ELEVENLABS INTEGRATION ---
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (mode === 'voice' && lastMessage && lastMessage.role === 'model' && lastMessage.id !== lastSpokenMessageId && !isLoading) {
+        playTextToSpeech(lastMessage.text);
+        setLastSpokenMessageId(lastMessage.id);
+    }
+  }, [messages, mode, isLoading, lastSpokenMessageId]);
 
+  // --- SPEECH RECOGNITION ---
   // --- SPEECH RECOGNITION ---
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -122,25 +133,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
     if (isListening) {
         recognitionRef.current.stop();
         setIsListening(false);
-    } else {
-        try {
-            recognitionRef.current.start();
-            setIsListening(true);
-        } catch (e) {
-            console.error("Failed to start recognition", e);
-        }
-    }
-  };
-
   const speakGreeting = () => {
-    if ('speechSynthesis' in window) {
-        // Cancel any existing speech
-        window.speechSynthesis.cancel();
-
-        const text = "Hi! I'm Gemma. I'm ready to help you build your non-profit. What's on your mind?";
-        const utterance = new SpeechSynthesisUtterance(text);
-        
-        // Simple voice selection preference
+    const text = "Hi! I'm Gemma. I'm ready to help you build your non-profit. What's on your mind?";
+    playTextToSpeech(text);
+  };    // Simple voice selection preference
         const voices = window.speechSynthesis.getVoices();
         const preferredVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Female'));
         if (preferredVoice) utterance.voice = preferredVoice;

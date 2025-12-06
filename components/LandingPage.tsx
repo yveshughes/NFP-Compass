@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { US_STATES } from '../constants';
 import { ArrowRight, MapPin } from 'lucide-react';
+import USMap from '../src/assets/US_Map.svg';
 
 interface LandingPageProps {
   onLaunch: (state: string) => void;
@@ -91,68 +92,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunch }) => {
         {/* Right Side: Visual Map */}
         <div className="flex-1 w-full max-w-md md:max-w-none relative">
             <div className="relative aspect-[1.5] w-full">
-                {/* Simplified Dot Map Representation for aesthetic */}
-                <svg viewBox="0 0 800 500" className="w-full h-full drop-shadow-2xl">
-                    <defs>
-                        <linearGradient id="mapGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stopColor="#334155" />
-                            <stop offset="100%" stopColor="#1e293b" />
-                        </linearGradient>
-                        <filter id="glow">
-                             <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
-                             <feMerge>
-                                 <feMergeNode in="coloredBlur"/>
-                                 <feMergeNode in="SourceGraphic"/>
-                             </feMerge>
-                        </filter>
-                    </defs>
-                    
-                    {/* Abstract US Shape Container */}
-                    <path 
-                        d="M 125 100 L 250 110 L 350 80 L 450 90 L 650 50 L 750 120 L 720 250 L 650 350 L 550 400 L 400 450 L 320 420 L 250 380 L 150 350 L 50 250 L 50 150 Z" 
-                        fill="url(#mapGradient)" 
-                        opacity="0.3"
-                    />
-
-                    {/* Stylized Dots for States (approximate positions) */}
-                    <g className="text-slate-600">
-                         {/* West */}
-                         <circle cx="100" cy="150" r="4" fill="currentColor" />
-                         <circle cx="100" cy="200" r="4" fill="currentColor" />
-                         <circle cx="100" cy="280" r="4" fill="currentColor" /> {/* CA */}
-                         <circle cx="150" cy="120" r="4" fill="currentColor" />
-                         <circle cx="180" cy="200" r="4" fill="currentColor" />
-                         
-                         {/* Midwest */}
-                         <circle cx="350" cy="150" r="4" fill="currentColor" />
-                         <circle cx="380" cy="200" r="4" fill="currentColor" />
-                         <circle cx="420" cy="180" r="4" fill="currentColor" />
-
-                         {/* East */}
-                         <circle cx="600" cy="150" r="4" fill="currentColor" />
-                         <circle cx="650" cy="200" r="4" fill="currentColor" />
-                         <circle cx="680" cy="300" r="4" fill="currentColor" /> {/* FL */}
-                         <circle cx="650" cy="100" r="4" fill="currentColor" /> {/* NY */}
-                    </g>
-                    
-                    {/* TEXAS Highlight */}
-                    <g 
-                        className={`transition-all duration-500 cursor-pointer ${selectedState === 'TX' ? 'opacity-100' : 'opacity-40 hover:opacity-60'}`}
-                        onClick={() => handleStateSelect('TX')}
-                    >
-                         <path 
-                            d="M 320 280 L 380 280 L 380 320 L 420 350 L 400 420 L 340 400 L 300 350 Z" 
-                            fill={selectedState === 'TX' ? '#3b82f6' : '#475569'}
-                            stroke={selectedState === 'TX' ? '#60a5fa' : '#64748b'}
-                            strokeWidth="2"
-                            filter={selectedState === 'TX' ? 'url(#glow)' : ''}
-                         />
-                         <text x="360" y="340" fill="white" fontSize="14" textAnchor="middle" pointerEvents="none" className="font-bold">TX</text>
-                    </g>
-
-                    {/* Connecting lines for effect */}
-                    <path d="M 100 280 L 340 340 L 680 300" stroke="currentColor" strokeWidth="1" strokeDasharray="4 4" className="text-slate-700/50" />
-                </svg>
+                <img 
+                  src={USMap} 
+                  alt="US Map" 
+                  className="w-full h-full object-contain drop-shadow-2xl"
+                />
 
                 {/* Floating Badges */}
                 <div className="absolute top-10 right-10 bg-slate-800/80 backdrop-blur border border-slate-700 p-3 rounded-lg shadow-xl animate-bounce-slow hidden md:block">

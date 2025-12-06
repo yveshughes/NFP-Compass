@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AppSection, BrandingData } from '../types';
 import { PRESET_PALETTES } from '../constants';
 import { Briefcase, Megaphone, Settings, Wallet, Palette, ChevronDown, BarChart3 } from 'lucide-react';
+import Logo from '../src/assets/logo.svg';
 
 interface TopNavigationProps {
   currentSection: AppSection;
@@ -51,7 +52,19 @@ const TopNavigation: React.FC<TopNavigationProps> = ({ currentSection, onSection
       <div className="flex h-16 items-center max-w-full">
         {/* Logo */}
         <div className="flex items-center gap-2 mr-6 md:mr-8 shrink-0">
-             <span className="w-7 h-7 bg-[var(--theme-primary)] rounded-md flex items-center justify-center text-xs font-bold text-white shadow-lg">N</span>
+             <div 
+               className="w-8 h-8 bg-[var(--theme-primary-bright)]"
+               style={{
+                 maskImage: `url(${Logo})`,
+                 maskSize: 'contain',
+                 maskRepeat: 'no-repeat',
+                 maskPosition: 'center',
+                 WebkitMaskImage: `url(${Logo})`,
+                 WebkitMaskSize: 'contain',
+                 WebkitMaskRepeat: 'no-repeat',
+                 WebkitMaskPosition: 'center'
+               }}
+             />
              <span className="text-white font-bold tracking-tight text-lg hidden sm:inline">NFP<span className="text-[var(--theme-primary-bright)]">compass</span></span>
              <span className="text-white font-bold tracking-tight text-lg sm:hidden">NFP</span>
         </div>
