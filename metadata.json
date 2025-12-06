@@ -1,0 +1,7 @@
+{
+  "name": "NFPcompass",
+  "description": "An AI-powered consultant for Texas Non-Profit formation, guiding users from mission definition to tax exemption and branding.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
