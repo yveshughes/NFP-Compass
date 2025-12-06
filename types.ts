@@ -1,7 +1,9 @@
+
 export enum AppSection {
   Incorporate = 'Incorporate',
   Promote = 'Promote',
-  Manage = 'Manage'
+  Manage = 'Manage',
+  Measure = 'Measure'
 }
 
 export enum Step {
@@ -14,7 +16,7 @@ export enum Step {
   Bylaws = 5,
   FederalTaxExemption = 6,
   StateTaxExemption = 7,
-  // Legacy aliases to keep types safe, though UI might hide them
+  // Legacy aliases to keep types safe
   Branding = 8, 
   Maintenance = 9,
 
@@ -30,7 +32,13 @@ export enum Step {
   StateReport = 201,   // Form 802
   BoardMeetings = 202,
   Bookkeeping = 203,
-  ComplianceCheck = 204
+  ComplianceCheck = 204,
+
+  // --- MEASURE (300-399) ---
+  MeasureDashboard = 300,
+  ImpactTracking = 301,
+  DonorAnalytics = 302,
+  CustomReports = 303
 }
 
 export interface Message {
@@ -40,9 +48,23 @@ export interface Message {
   timestamp: number;
 }
 
+export interface Color {
+  role: string;
+  hex: string;
+  name: string;
+}
+
 export interface BrandingData {
-  colors: string[];
+  paletteName: string;
+  colors: Color[];
   mood: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  plan: string;
+  initials: string;
 }
 
 export interface AppState {
@@ -53,4 +75,5 @@ export interface AppState {
   browserUrl: string | null;
   brandingData: BrandingData | null;
   supplementalProvisionText: string | null;
+  activeOrg: Organization | null;
 }

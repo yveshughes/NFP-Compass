@@ -1,4 +1,5 @@
-import { Step } from "./types";
+
+import { Step, BrandingData, Organization } from "./types";
 
 export const INITIAL_SYSTEM_PROMPT = `
 # ROLE & OBJECTIVE
@@ -28,6 +29,34 @@ Track progress through these 7 Critical Steps:
 6.  **Federal 501(c)(3) (Form 1023-EZ):** Eligibility check.
 7.  **State Tax Exemption (AP-204):** Filing with Comptroller.
 
+# COLOR PALETTE GENERATION RULES
+When the user asks for a color palette, analyze their mission and select one of the following "Emotional Archetypes":
+
+1. **GROWTH (Green/Blue):** For environment, health, and food.
+   - Use: \`#2F80ED\` (Blue) + \`#6FCF97\` (Green).
+2. **EMPATHY (Coral/Navy):** For housing, poverty relief, and children.
+   - Use: \`#FF6B6B\` (Coral) + \`#2D3436\` (Navy).
+3. **BOLD (Purple/Teal):** For education, tech, and advocacy.
+   - Use: \`#8E44AD\` (Purple) + \`#00CEC9\` (Teal).
+4. **TEXAS (Deep Blue/Orange):** For local Texas pride organizations.
+   - Use: \`#1C3F94\` (Blue) + \`#F2994A\` (Orange).
+
+**Output Format:**
+Always present the palette in a JSON block for the UI to render, followed by a brief explanation.
+
+Example JSON:
+\`\`\`json
+{
+  "palette_name": "The Helping Hand",
+  "colors": [
+    {"role": "Primary", "hex": "#FF6B6B", "name": "Soft Coral"},
+    {"role": "Secondary", "hex": "#2D3436", "name": "Slate Navy"},
+    {"role": "Accent", "hex": "#FFD93D", "name": "Marigold"},
+    {"role": "Background", "hex": "#FFF5F5", "name": "Blush"}
+  ]
+}
+\`\`\`
+
 # BROWSER CONTEXT
 Mention these URLs when relevant:
 * Name Search: https://mycpa.cpa.state.tx.us/coa/
@@ -39,7 +68,7 @@ Mention these URLs when relevant:
 When asked for design/branding:
 1. Switch to "Creative Mode".
 2. Ask about mood, colors, symbols.
-3. Suggest Hex codes: "Palette: [#123456, #ABCDEF, ...]".
+3. Use the JSON format defined above to suggest palettes.
 
 # STATE MANAGEMENT
 End every response with: [STEP: X]
@@ -48,6 +77,55 @@ If user is in Promote/Manage phases, stick to relevant step IDs if possible, or 
 `;
 
 export const INITIAL_GREETING = "Hi! I'm Gemma, here to help you get your NFP started so you can change the world! Are you ready to get started?";
+
+export const PRESET_PALETTES: Record<string, BrandingData> = {
+  GROWTH: {
+    paletteName: "Growth & Health",
+    mood: "Fresh, Vital, Organic",
+    colors: [
+        { role: "Primary", hex: "#2F80ED", name: "Trust Blue" },
+        { role: "Secondary", hex: "#6FCF97", name: "Growth Green" },
+        { role: "Accent", hex: "#F2F2F2", name: "Clean White" },
+        { role: "Text", hex: "#333333", name: "Charcoal" }
+    ]
+  },
+  EMPATHY: {
+    paletteName: "Empathy & Care",
+    mood: "Warm, Urgent, Loving",
+    colors: [
+        { role: "Primary", hex: "#FF6B6B", name: "Coral Heart" },
+        { role: "Secondary", hex: "#2D3436", name: "Solid Navy" },
+        { role: "Accent", hex: "#FFD93D", name: "Hope Yellow" },
+        { role: "Background", hex: "#FFF5F5", name: "Soft Blush" }
+    ]
+  },
+  BOLD: {
+    paletteName: "Bold Future",
+    mood: "Innovative, Strong, Loud",
+    colors: [
+        { role: "Primary", hex: "#8E44AD", name: "Vision Purple" },
+        { role: "Secondary", hex: "#00CEC9", name: "Action Teal" },
+        { role: "Accent", hex: "#2D3436", name: "Midnight" },
+        { role: "Background", hex: "#F8F9FA", name: "Tech Grey" }
+    ]
+  },
+  TEXAS: {
+    paletteName: "Lone Star Pride",
+    mood: "Local, Loyal, Texan",
+    colors: [
+        { role: "Primary", hex: "#1C3F94", name: "Texas Blue" },
+        { role: "Secondary", hex: "#F2994A", name: "Sunset Orange" },
+        { role: "Accent", hex: "#BF0A30", name: "Lone Star Red" },
+        { role: "Background", hex: "#FFFFFF", name: "Pure White" }
+    ]
+  }
+};
+
+export const MOCK_ORGS: Organization[] = [
+    { id: 'org_1', name: 'Green Earth TX', plan: 'Pro', initials: 'GE' },
+    { id: 'org_2', name: 'Austin Housing', plan: 'Free', initials: 'AH' },
+    { id: 'org_3', name: 'Tech for Good', plan: 'Free', initials: 'TG' }
+];
 
 export const STEPS_INFO: Record<Step, { title: string; description: string; url?: string }> = {
   // INCORPORATE
@@ -74,7 +152,13 @@ export const STEPS_INFO: Record<Step, { title: string; description: string; url?
   [Step.StateReport]: { title: "State Report", description: "File Form 802 (Every 4 yrs)" },
   [Step.BoardMeetings]: { title: "Board Meetings", description: "Record Annual Minutes" },
   [Step.Bookkeeping]: { title: "Bookkeeping", description: "Track Income & Expenses" },
-  [Step.ComplianceCheck]: { title: "Compliance Check", description: "Review 'Good Standing' Status" }
+  [Step.ComplianceCheck]: { title: "Compliance Check", description: "Review 'Good Standing' Status" },
+
+  // MEASURE
+  [Step.MeasureDashboard]: { title: "Dashboard", description: "Overview of Key Metrics" },
+  [Step.ImpactTracking]: { title: "Impact Tracking", description: "Log Program Outcomes" },
+  [Step.DonorAnalytics]: { title: "Donor Analytics", description: "Retention & Growth Stats" },
+  [Step.CustomReports]: { title: "Custom Reports", description: "Export Data for Stakeholders" },
 };
 
 export const US_STATES = [

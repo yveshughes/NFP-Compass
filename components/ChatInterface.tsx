@@ -1,6 +1,7 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import { Message } from '../types';
-import { Send, Bot, User, Loader2, Mic, MicOff, Camera, CameraOff, GripVertical } from 'lucide-react';
+import { Send, Bot, Loader2, Mic, CameraOff, MessageSquare, Headphones, Eye, Aperture, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface ChatInterfaceProps {
@@ -9,23 +10,20 @@ interface ChatInterfaceProps {
   onSendMessage: (text: string) => void;
 }
 
+type ChatMode = 'text' | 'voice' | 'vision';
+
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSendMessage }) => {
+  const [mode, setMode] = useState<ChatMode>('text');
   const [inputText, setInputText] = useState('');
+  
+  // Media States
   const [isListening, setIsListening] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const dockRef = useRef<HTMLDivElement>(null);
   
-  // Docking & Drag State
-  const [isDocked, setIsDocked] = useState(true);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef({ x: 0, y: 0 }); // Mouse position relative to element top-left
-  const hasMovedRef = useRef(false);
-
-  // Media Refs
+  // Refs
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const visionVideoRef = useRef<HTMLVideoElement>(null); // Dedicated ref for Vision Mode
   const streamRef = useRef<MediaStream | null>(null);
 
   const scrollToBottom = () => {
@@ -33,17 +31,24 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
+    if (mode === 'text') {
+        scrollToBottom();
+    }
+  }, [messages, isLoading, mode]);
 
   // Cleanup media on unmount
   useEffect(() => {
     return () => {
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-        }
+        stopMediaStream();
     };
   }, []);
+
+  const stopMediaStream = () => {
+    if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+    }
+  };
 
   // --- SPEECH RECOGNITION ---
   useEffect(() => {
@@ -56,7 +61,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
 
         recognition.onresult = (event: any) => {
             const transcript = event.results[0][0].transcript;
-            setInputText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+            
+            if (mode === 'voice') {
+                // In voice mode, auto-send
+                onSendMessage(transcript);
+            } else {
+                // In text mode, append to input
+                setInputText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+            }
             setIsListening(false);
         };
 
@@ -71,7 +83,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
 
         recognitionRef.current = recognition;
     }
-  }, []);
+  }, [mode, onSendMessage]);
 
   const toggleListening = () => {
     if (!recognitionRef.current) {
@@ -87,25 +99,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
     }
   };
 
-  // --- CAMERA ---
-  const toggleCamera = async () => {
-    if (isCameraOn) {
-        // Stop camera
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-            streamRef.current = null;
-        }
+  // --- CAMERA LOGIC ---
+  const toggleCamera = async (targetRef: React.RefObject<HTMLVideoElement | null>) => {
+    if (isCameraOn && streamRef.current) {
+        stopMediaStream();
         setIsCameraOn(false);
     } else {
-        // Start camera
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
             streamRef.current = stream;
             setIsCameraOn(true);
-            // We need a slight delay to let the video element render if it wasn't there
             setTimeout(() => {
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
+                if (targetRef.current) {
+                    targetRef.current.srcObject = stream;
                 }
             }, 100);
         } catch (err) {
@@ -115,6 +121,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
     }
   };
 
+  // Effect to handle mode switching cleanup/setup
+  useEffect(() => {
+    // When switching OUT of vision, stop camera
+    if (mode !== 'vision' && isCameraOn) {
+        stopMediaStream();
+        setIsCameraOn(false);
+    }
+    
+    // When switching INTO vision, auto-start camera
+    if (mode === 'vision') {
+        stopMediaStream(); // Reset first
+        setIsCameraOn(false);
+        toggleCamera(visionVideoRef);
+    }
+  }, [mode]);
+
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (inputText.trim() && !isLoading) {
@@ -123,181 +146,41 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
     }
   };
 
-  // --- DRAG HANDLERS ---
-  const handlePointerDown = (e: React.PointerEvent) => {
-    e.preventDefault(); // Prevent text selection
-    setIsDragging(true);
-    hasMovedRef.current = false;
-    e.currentTarget.setPointerCapture(e.pointerId);
-
-    if (isDocked) {
-        // Undock logic: Calculate current screen position to switch to fixed without jumping
-        const rect = e.currentTarget.getBoundingClientRect();
-        setPosition({ x: rect.left, y: rect.top });
-        setIsDocked(false);
-        // Calculate offset from the top-left of the element
-        dragStartRef.current = {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
-        };
-    } else {
-        // Already undocked
-        dragStartRef.current = {
-            x: e.clientX - position.x,
-            y: e.clientY - position.y
-        };
-    }
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging) return;
-    
-    const newX = e.clientX - dragStartRef.current.x;
-    const newY = e.clientY - dragStartRef.current.y;
-    
-    // Threshold to prevent accidental micro-drags being counted as moves
-    if (Math.abs(newX - position.x) > 2 || Math.abs(newY - position.y) > 2) {
-        hasMovedRef.current = true;
-    }
-
-    setPosition({ x: newX, y: newY });
-  };
-
-  const handlePointerUp = (e: React.PointerEvent) => {
-    setIsDragging(false);
-    e.currentTarget.releasePointerCapture(e.pointerId);
-    
-    // Check for docking proximity if currently undocked
-    if (!isDocked && dockRef.current) {
-        const dockRect = dockRef.current.getBoundingClientRect();
-        const dist = Math.hypot(position.x - dockRect.left, position.y - dockRect.top);
-        
-        // Snap distance threshold (e.g., 100px)
-        if (dist < 100) {
-            setIsDocked(true);
-            return; // Exit, don't trigger clicks
-        }
-    }
-
-    // Only trigger clicks if we didn't drag
-    if (!hasMovedRef.current) {
-       // Logic to determine which button was clicked is handled by child onClick propagation
-       // But since the parent captures pointer, we might need to rely on the target check inside the buttons
-    }
-  };
-
-  // --- COMPONENT: MEDIA CAPSULE ---
-  const MediaCapsule = () => (
-    <div 
-        className={`flex items-center gap-2 p-1.5 rounded-full shadow-lg transition-colors duration-200 cursor-grab active:cursor-grabbing border border-slate-700/50 ${isDragging ? 'scale-105 shadow-xl' : ''} ${isListening || isCameraOn ? 'bg-slate-900' : 'bg-slate-800'}`}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-    >
-        {/* Grip Handle */}
-        <div className="pl-1 pr-0.5 text-slate-500">
-            <GripVertical className="w-4 h-4" />
-        </div>
-
-        {/* Mic Toggle */}
-        <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); toggleListening(); }}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                isListening 
-                ? 'bg-red-500 text-white animate-pulse' 
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            }`}
-        >
-            {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-        </button>
-
-        {/* Camera Toggle */}
-        <button
-             type="button"
-             onClick={(e) => { e.stopPropagation(); toggleCamera(); }}
-             className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                 isCameraOn
-                 ? 'bg-green-500 text-white' 
-                 : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-             }`}
-        >
-             {isCameraOn ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
-        </button>
-
-        {/* Video Preview (Attached) */}
-        {isCameraOn && (
-            <div className="absolute bottom-full left-0 mb-2 w-48 bg-black rounded-lg overflow-hidden shadow-xl border-2 border-slate-800">
-                <video 
-                    ref={videoRef} 
-                    autoPlay 
-                    playsInline 
-                    muted 
-                    className="w-full h-auto object-cover transform -scale-x-100" // Mirror effect
-                />
-                <div className="absolute bottom-2 right-2 flex gap-1">
-                     <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                     <span className="text-[10px] text-white font-medium uppercase">Live</span>
-                </div>
-            </div>
-        )}
-    </div>
-  );
-
-  return (
-    <div className="flex flex-col h-full bg-white relative">
-      {/* Messages Area */}
+  // --- VIEW: TEXT MODE ---
+  const renderTextMode = () => (
+    <>
       <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide pb-6">
         {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
+          <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {msg.role === 'model' && (
-              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-1">
-                <Bot className="w-5 h-5 text-blue-600" />
+              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-1">
+                <Bot className="w-5 h-5 text-[var(--theme-primary)]" />
               </div>
             )}
-            
-            <div
-              className={`max-w-[85%] rounded-2xl px-5 py-3.5 shadow-sm text-sm leading-relaxed ${
-                msg.role === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-none'
-                  : 'bg-slate-100 text-slate-800 rounded-bl-none prose prose-sm prose-blue max-w-none'
+            <div className={`max-w-[85%] rounded-2xl px-5 py-3.5 shadow-sm text-sm leading-relaxed ${
+                msg.role === 'user' ? 'text-white rounded-br-none' : 'bg-slate-100 text-slate-800 rounded-bl-none prose prose-sm prose-blue max-w-none'
               }`}
+              style={msg.role === 'user' ? { backgroundColor: 'var(--theme-primary)' } : {}}
             >
               {msg.role === 'user' ? (
                 <div>{msg.text}</div>
               ) : (
-                <ReactMarkdown
-                    components={{
+                <ReactMarkdown components={{
                         h1: ({node, ...props}) => <h1 className="text-lg font-bold mt-2 mb-1" {...props} />,
-                        h2: ({node, ...props}) => <h2 className="text-base font-bold mt-2 mb-1" {...props} />,
                         ul: ({node, ...props}) => <ul className="list-disc pl-4 space-y-1 mb-2" {...props} />,
-                        ol: ({node, ...props}) => <ol className="list-decimal pl-4 space-y-1 mb-2" {...props} />,
-                        li: ({node, ...props}) => <li className="pl-1" {...props} />,
-                        p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
-                        code: ({node, ...props}) => <code className="bg-slate-200 px-1 py-0.5 rounded text-xs font-mono" {...props} />,
-                        a: ({node, ...props}) => <a className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
+                        a: ({node, ...props}) => <a className="text-[var(--theme-primary)] hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
                     }}
                 >
                     {msg.text}
                 </ReactMarkdown>
               )}
             </div>
-
-            {msg.role === 'user' && (
-              <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0 mt-1">
-                <User className="w-5 h-5 text-slate-500" />
-              </div>
-            )}
           </div>
         ))}
-        
         {isLoading && (
           <div className="flex gap-4">
-             <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <Bot className="w-5 h-5 text-blue-600" />
+             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
+                <Bot className="w-5 h-5 text-[var(--theme-primary)]" />
               </div>
               <div className="bg-slate-100 rounded-2xl rounded-bl-none px-5 py-3.5 flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
@@ -308,54 +191,182 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input & Dock Area */}
-      <div className="p-4 border-t border-slate-100 bg-white flex items-end gap-3 z-10">
-        
-        {/* The Dock */}
-        <div ref={dockRef} className="shrink-0 w-[120px] h-[54px] relative flex items-center justify-center">
-            {isDocked ? (
-                <MediaCapsule />
-            ) : (
-                <div className="w-full h-12 rounded-full border-2 border-dashed border-slate-200 bg-slate-50/50 flex items-center justify-center text-xs text-slate-300 select-none">
-                    Drop to Dock
-                </div>
-            )}
-        </div>
-
-        {/* Input Form */}
-        <form onSubmit={handleSubmit} className="flex-1 flex gap-2 items-center bg-slate-50 p-2 rounded-xl border border-slate-200 focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100 transition-all h-[54px]">
+      <div className="p-4 border-t border-slate-100 bg-white z-10">
+        <form onSubmit={handleSubmit} className="flex gap-2 items-center bg-slate-50 p-2 rounded-xl border border-slate-200 focus-within:ring-2 focus-within:ring-[var(--theme-primary-dim)] transition-all h-[54px]" style={{borderColor: 'transparent'}}>
           <input
             type="text"
-            className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-slate-800 placeholder:text-slate-400 px-3 h-full"
-            placeholder={isListening ? "Listening..." : "Type your message..."}
+            className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-slate-800 px-3 h-full"
+            placeholder="Type your message..."
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             disabled={isLoading}
           />
-          <button
-            type="submit"
-            disabled={!inputText.trim() || isLoading}
-            className="p-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+          <button 
+            type="submit" 
+            disabled={!inputText.trim() || isLoading} 
+            className="p-2.5 text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-colors shrink-0"
+            style={{ backgroundColor: 'var(--theme-primary)' }}
           >
             <Send className="w-4 h-4" />
           </button>
         </form>
       </div>
+    </>
+  );
 
-      {/* Floating Media Capsule (When Undocked) */}
-      {!isDocked && (
-        <div 
-            style={{ 
-                position: 'fixed', 
-                left: `${position.x}px`, 
-                top: `${position.y}px`,
-                touchAction: 'none'
-            }}
-            className="z-50"
-        >
-            <MediaCapsule />
+  // --- VIEW: VOICE MODE ---
+  const renderVoiceMode = () => (
+    <div className="flex-1 flex flex-col items-center justify-center bg-slate-900 relative overflow-hidden">
+        {/* Animated Background */}
+        <div className="absolute inset-0 opacity-10">
+             <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[var(--theme-primary)] rounded-full blur-3xl animate-pulse"></div>
+             <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-purple-500 rounded-full blur-3xl animate-pulse delay-1000"></div>
         </div>
-      )}
+
+        {/* Central Avatar */}
+        <div className="relative z-10 flex flex-col items-center">
+            <div className="relative mb-8">
+                {isListening && <div className="absolute inset-0 rounded-full animate-pulse-ring" style={{backgroundColor: 'var(--theme-primary)'}}></div>}
+                <div 
+                    className="relative w-32 h-32 rounded-full flex items-center justify-center shadow-2xl border-4 border-slate-800"
+                    style={{ background: 'linear-gradient(to bottom right, var(--theme-primary), #4f46e5)' }}
+                >
+                    {isLoading ? (
+                        <Loader2 className="w-12 h-12 text-white/80 animate-spin" />
+                    ) : (
+                        <Bot className="w-12 h-12 text-white" />
+                    )}
+                </div>
+            </div>
+
+            <div className="h-12 flex items-center gap-1 mb-8">
+                {isListening ? (
+                    <>
+                        <div className="w-2 rounded-full animate-wave" style={{backgroundColor: 'var(--theme-primary)'}}></div>
+                        <div className="w-2 rounded-full animate-wave animate-wave-delay-1" style={{backgroundColor: 'var(--theme-primary)'}}></div>
+                        <div className="w-2 rounded-full animate-wave animate-wave-delay-2" style={{backgroundColor: 'var(--theme-primary)'}}></div>
+                        <div className="w-2 rounded-full animate-wave animate-wave-delay-3" style={{backgroundColor: 'var(--theme-primary)'}}></div>
+                        <div className="w-2 rounded-full animate-wave animate-wave-delay-4" style={{backgroundColor: 'var(--theme-primary)'}}></div>
+                    </>
+                ) : (
+                    <span className="text-slate-400 text-sm font-medium tracking-wide">
+                        {isLoading ? "GEMMA IS THINKING..." : "TAP TO SPEAK"}
+                    </span>
+                )}
+            </div>
+
+            <button
+                onClick={toggleListening}
+                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all transform hover:scale-105 ${
+                    isListening 
+                    ? 'bg-red-500 hover:bg-red-600 shadow-[0_0_30px_rgba(239,68,68,0.4)]' 
+                    : 'bg-white hover:bg-slate-100 shadow-[0_0_30px_rgba(255,255,255,0.1)]'
+                }`}
+            >
+                {isListening ? <Mic className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-slate-900" />}
+            </button>
+        </div>
+
+        {/* Last Message Context */}
+        <div className="absolute bottom-0 w-full p-6 bg-gradient-to-t from-slate-900 via-slate-900/90 to-transparent">
+             <div className="max-w-md mx-auto text-center">
+                 {messages.length > 0 && messages[messages.length - 1].role === 'model' && (
+                     <p className="text-slate-300 text-sm italic opacity-80 line-clamp-2">
+                        "{messages[messages.length - 1].text}"
+                     </p>
+                 )}
+             </div>
+        </div>
+    </div>
+  );
+
+  // --- VIEW: VISION MODE ---
+  const renderVisionMode = () => (
+    <div className="flex-1 bg-black relative flex flex-col">
+        {/* Camera Feed */}
+        <div className="flex-1 relative overflow-hidden flex items-center justify-center">
+            {isCameraOn ? (
+                <video 
+                    ref={visionVideoRef} 
+                    autoPlay 
+                    playsInline 
+                    muted 
+                    className="w-full h-full object-cover transform -scale-x-100 opacity-90"
+                />
+            ) : (
+                <div className="text-slate-500 flex flex-col items-center">
+                    <CameraOff className="w-12 h-12 mb-4 opacity-50" />
+                    <p>Camera is off</p>
+                    <button onClick={() => toggleCamera(visionVideoRef)} className="mt-4 px-4 py-2 bg-slate-800 rounded text-sm hover:bg-slate-700">Turn On</button>
+                </div>
+            )}
+            
+            {/* Overlay UI */}
+            <div className="absolute inset-0 pointer-events-none border-[20px] border-slate-900/50">
+                <div className="w-full h-full border-2 border-white/20 relative">
+                     <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4" style={{borderColor: 'var(--theme-primary)'}}></div>
+                     <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4" style={{borderColor: 'var(--theme-primary)'}}></div>
+                     <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4" style={{borderColor: 'var(--theme-primary)'}}></div>
+                     <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4" style={{borderColor: 'var(--theme-primary)'}}></div>
+                </div>
+            </div>
+        </div>
+
+        {/* Vision Controls */}
+        <div className="h-24 bg-slate-900 flex items-center justify-center gap-8 border-t border-slate-800 shrink-0">
+             <button onClick={() => { stopMediaStream(); setIsCameraOn(false); }} className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-slate-700 hover:text-white">
+                <X className="w-5 h-5" />
+             </button>
+
+             <button 
+                onClick={() => onSendMessage("I've analyzed this visual context.")} // Placeholder for real vision API
+                className="w-16 h-16 rounded-full bg-white border-4 border-slate-300 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+             >
+                <Aperture className="w-8 h-8" style={{ color: 'var(--theme-primary)' }} />
+             </button>
+
+             <div className="w-12 h-12"></div> {/* Spacer for balance */}
+        </div>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col h-full bg-white relative">
+      
+      {/* Top Tabs (Segmented Control) */}
+      <div className="px-4 py-3 bg-white border-b border-slate-100 flex items-center justify-center shrink-0">
+        <div className="flex bg-slate-100/80 p-1 rounded-lg">
+            <button 
+                onClick={() => setMode('text')}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${mode === 'text' ? 'bg-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                style={mode === 'text' ? { color: 'var(--theme-primary)' } : {}}
+            >
+                <MessageSquare className="w-4 h-4" />
+                Text
+            </button>
+            <button 
+                onClick={() => setMode('voice')}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${mode === 'voice' ? 'bg-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                style={mode === 'voice' ? { color: 'var(--theme-primary)' } : {}}
+            >
+                <Headphones className="w-4 h-4" />
+                Voice
+            </button>
+            <button 
+                onClick={() => setMode('vision')}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${mode === 'vision' ? 'bg-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                style={mode === 'vision' ? { color: 'var(--theme-primary)' } : {}}
+            >
+                <Eye className="w-4 h-4" />
+                Vision
+            </button>
+        </div>
+      </div>
+
+      {/* Main Content Render */}
+      {mode === 'text' && renderTextMode()}
+      {mode === 'voice' && renderVoiceMode()}
+      {mode === 'vision' && renderVisionMode()}
 
     </div>
   );

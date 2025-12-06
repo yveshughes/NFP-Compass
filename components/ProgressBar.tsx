@@ -1,15 +1,19 @@
+
 import React from 'react';
-import { Step, AppSection } from '../types';
+import { Step, AppSection, Organization } from '../types';
 import { STEPS_INFO } from '../constants';
-import { CheckCircle2, Circle, Lock, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Circle } from 'lucide-react';
+import OrgSwitcher from './OrgSwitcher';
 
 interface ProgressBarProps {
   currentStep: Step;
   currentSection: AppSection;
-  onStepSelect?: (step: Step) => void; // Optional handler if we want to allow jumping
+  onStepSelect?: (step: Step) => void;
+  activeOrg: Organization | null;
+  onOrgChange: (org: Organization) => void;
 }
 
-const ProgressBar: React.FC<ProgressBarProps> = ({ currentStep, currentSection, onStepSelect }) => {
+const ProgressBar: React.FC<ProgressBarProps> = ({ currentStep, currentSection, onStepSelect, activeOrg, onOrgChange }) => {
   
   // Define steps for each section
   const getSectionSteps = (section: AppSection): Step[] => {
@@ -21,6 +25,8 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ currentStep, currentSection, 
             return [100, 101, 102, 103, 104];
         case AppSection.Manage:
             return [200, 201, 202, 203, 204];
+        case AppSection.Measure:
+            return [300, 301, 302, 303];
         default:
             return [];
     }
@@ -35,7 +41,8 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ currentStep, currentSection, 
       <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
         <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 px-2">
             {currentSection === AppSection.Incorporate ? 'Formation Steps' : 
-             currentSection === AppSection.Promote ? 'Growth Tools' : 'Compliance'}
+             currentSection === AppSection.Promote ? 'Growth Tools' : 
+             currentSection === AppSection.Measure ? 'Impact Data' : 'Compliance'}
         </div>
         
         <div className="relative">
@@ -44,7 +51,7 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ currentStep, currentSection, 
 
             {stepsToRender.map((step) => {
                 const isActive = step === currentStep;
-                // For non-linear sections (Promote/Manage), just show as regular unless active
+                // For non-linear sections (Promote/Manage/Measure), just show as regular unless active
                 // For Incorporate, we track progress.
                 const isCompleted = currentSection === AppSection.Incorporate && step < currentStep;
                 const info = STEPS_INFO[step];
@@ -61,7 +68,10 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ currentStep, currentSection, 
                                 <CheckCircle2 className="w-4 h-4" />
                             </div>
                         ) : isActive ? (
-                            <div className="w-8 h-8 rounded-full bg-blue-900/50 border-2 border-blue-500 flex items-center justify-center text-blue-400 z-10 shadow-[0_0_10px_rgba(59,130,246,0.5)]">
+                            <div 
+                                className="w-8 h-8 rounded-full bg-slate-900 border-2 flex items-center justify-center z-10"
+                                style={{ borderColor: 'var(--theme-primary-bright)', color: 'var(--theme-primary-bright)', boxShadow: '0 0 15px var(--theme-primary-dim)' }}
+                            >
                                 <Circle className="w-3 h-3 fill-current" />
                             </div>
                         ) : (
@@ -72,7 +82,10 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ currentStep, currentSection, 
                     </div>
                     
                     <div className={`flex flex-col pt-0.5 transition-opacity duration-300 ${isActive ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`}>
-                        <span className={`text-sm font-medium ${isActive ? 'text-blue-100' : 'text-slate-300'}`}>
+                        <span 
+                            className={`text-sm font-medium ${isActive ? '' : 'text-slate-300'}`}
+                            style={isActive ? { color: 'var(--theme-primary-bright)' } : {}} 
+                        >
                             {info.title}
                         </span>
                         <span className="text-xs text-slate-500 leading-tight mt-0.5">
@@ -85,12 +98,9 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ currentStep, currentSection, 
         </div>
       </div>
 
-      {/* Footer / Info */}
+      {/* Footer: Organization Switcher */}
       <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-         <div className="text-[10px] text-center text-slate-600">
-            TX Non-Profit Guide v1.2<br/>
-            {currentSection} Mode Active
-         </div>
+         <OrgSwitcher currentOrg={activeOrg} onSwitch={onOrgChange} />
       </div>
     </div>
   );
