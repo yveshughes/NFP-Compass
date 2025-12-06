@@ -1,7 +1,7 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { Message } from '../types';
-import { Send, Bot, Loader2, Mic, CameraOff, MessageSquare, Headphones, Eye, Aperture, X } from 'lucide-react';
+import { Send, Bot, Loader2, Mic, CameraOff, MessageSquare, Headphones, Eye, Aperture, X, Play } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface ChatInterfaceProps {
@@ -19,6 +19,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
   // Media States
   const [isListening, setIsListening] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
+  const [voiceSessionStarted, setVoiceSessionStarted] = useState(false);
   
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -36,12 +37,40 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
     }
   }, [messages, isLoading, mode]);
 
-  // Cleanup media on unmount
+  // Cleanup media on unmount or mode switch
   useEffect(() => {
     return () => {
         stopMediaStream();
+        window.speechSynthesis.cancel();
     };
   }, []);
+
+  // Handle Mode Switching Cleanup
+  useEffect(() => {
+    // When switching OUT of vision, stop camera
+    if (mode !== 'vision' && isCameraOn) {
+        stopMediaStream();
+        setIsCameraOn(false);
+    }
+    
+    // When switching INTO vision, auto-start camera
+    if (mode === 'vision') {
+        stopMediaStream(); // Reset first
+        setIsCameraOn(false);
+        toggleCamera(visionVideoRef);
+    }
+
+    // When switching OUT of voice, stop listening/speaking and reset session
+    if (mode !== 'voice') {
+        window.speechSynthesis.cancel();
+        if (isListening && recognitionRef.current) {
+            recognitionRef.current.stop();
+            setIsListening(false);
+        }
+        setVoiceSessionStarted(false);
+    }
+  }, [mode]);
+
 
   const stopMediaStream = () => {
     if (streamRef.current) {
@@ -94,9 +123,42 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
         recognitionRef.current.stop();
         setIsListening(false);
     } else {
-        recognitionRef.current.start();
-        setIsListening(true);
+        try {
+            recognitionRef.current.start();
+            setIsListening(true);
+        } catch (e) {
+            console.error("Failed to start recognition", e);
+        }
     }
+  };
+
+  const speakGreeting = () => {
+    if ('speechSynthesis' in window) {
+        // Cancel any existing speech
+        window.speechSynthesis.cancel();
+
+        const text = "Hi! I'm Gemma. I'm ready to help you build your non-profit. What's on your mind?";
+        const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Simple voice selection preference
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Female'));
+        if (preferredVoice) utterance.voice = preferredVoice;
+        
+        utterance.rate = 1.05;
+        utterance.pitch = 1.0;
+        
+        window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const handleStartVoiceSession = () => {
+      setVoiceSessionStarted(true);
+      speakGreeting();
+      // Delay listening slightly to let the greeting start
+      setTimeout(() => {
+        if (!isListening) toggleListening();
+      }, 800);
   };
 
   // --- CAMERA LOGIC ---
@@ -120,22 +182,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
         }
     }
   };
-
-  // Effect to handle mode switching cleanup/setup
-  useEffect(() => {
-    // When switching OUT of vision, stop camera
-    if (mode !== 'vision' && isCameraOn) {
-        stopMediaStream();
-        setIsCameraOn(false);
-    }
-    
-    // When switching INTO vision, auto-start camera
-    if (mode === 'vision') {
-        stopMediaStream(); // Reset first
-        setIsCameraOn(false);
-        toggleCamera(visionVideoRef);
-    }
-  }, [mode]);
 
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -218,65 +264,87 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
   const renderVoiceMode = () => (
     <div className="flex-1 flex flex-col items-center justify-center bg-slate-900 relative overflow-hidden">
         {/* Animated Background */}
-        <div className="absolute inset-0 opacity-10">
+        <div className="absolute inset-0 opacity-10 pointer-events-none">
              <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[var(--theme-primary)] rounded-full blur-3xl animate-pulse"></div>
              <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-purple-500 rounded-full blur-3xl animate-pulse delay-1000"></div>
         </div>
 
-        {/* Central Avatar */}
-        <div className="relative z-10 flex flex-col items-center">
-            <div className="relative mb-8">
-                {isListening && <div className="absolute inset-0 rounded-full animate-pulse-ring" style={{backgroundColor: 'var(--theme-primary)'}}></div>}
-                <div 
-                    className="relative w-32 h-32 rounded-full flex items-center justify-center shadow-2xl border-4 border-slate-800"
-                    style={{ background: 'linear-gradient(to bottom right, var(--theme-primary), #4f46e5)' }}
+        {!voiceSessionStarted ? (
+            // START SCREEN
+            <div className="relative z-10 flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
+                <div className="w-24 h-24 rounded-3xl bg-slate-800 flex items-center justify-center mb-6 shadow-2xl border border-slate-700">
+                    <Headphones className="w-10 h-10 text-[var(--theme-primary)]" />
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Voice Mode</h2>
+                <p className="text-slate-400 text-sm mb-8 text-center max-w-xs">
+                    Talk to Gemma hands-free. She can answer questions, draft documents, and guide you through the process.
+                </p>
+                <button
+                    onClick={handleStartVoiceSession}
+                    className="group relative flex items-center gap-3 px-8 py-4 bg-[var(--theme-primary)] rounded-full text-white font-semibold text-lg hover:brightness-110 transition-all shadow-[0_0_40px_-10px_var(--theme-primary)] hover:scale-105 active:scale-95"
                 >
-                    {isLoading ? (
-                        <Loader2 className="w-12 h-12 text-white/80 animate-spin" />
+                    <Play className="w-5 h-5 fill-current" />
+                    Start Conversation
+                </button>
+            </div>
+        ) : (
+            // ACTIVE SESSION SCREEN
+            <div className="relative z-10 flex flex-col items-center animate-in fade-in duration-500">
+                <div className="relative mb-8">
+                    {isListening && <div className="absolute inset-0 rounded-full animate-pulse-ring" style={{backgroundColor: 'var(--theme-primary)'}}></div>}
+                    <div 
+                        className="relative w-32 h-32 rounded-full flex items-center justify-center shadow-2xl border-4 border-slate-800"
+                        style={{ background: 'linear-gradient(to bottom right, var(--theme-primary), #4f46e5)' }}
+                    >
+                        {isLoading ? (
+                            <Loader2 className="w-12 h-12 text-white/80 animate-spin" />
+                        ) : (
+                            <Bot className="w-12 h-12 text-white" />
+                        )}
+                    </div>
+                </div>
+
+                <div className="h-12 flex items-center gap-1 mb-8">
+                    {isListening ? (
+                        <>
+                            <div className="w-2 rounded-full animate-wave" style={{backgroundColor: 'var(--theme-primary)'}}></div>
+                            <div className="w-2 rounded-full animate-wave animate-wave-delay-1" style={{backgroundColor: 'var(--theme-primary)'}}></div>
+                            <div className="w-2 rounded-full animate-wave animate-wave-delay-2" style={{backgroundColor: 'var(--theme-primary)'}}></div>
+                            <div className="w-2 rounded-full animate-wave animate-wave-delay-3" style={{backgroundColor: 'var(--theme-primary)'}}></div>
+                            <div className="w-2 rounded-full animate-wave animate-wave-delay-4" style={{backgroundColor: 'var(--theme-primary)'}}></div>
+                        </>
                     ) : (
-                        <Bot className="w-12 h-12 text-white" />
+                        <span className="text-slate-400 text-sm font-medium tracking-wide">
+                            {isLoading ? "GEMMA IS THINKING..." : "TAP TO SPEAK"}
+                        </span>
+                    )}
+                </div>
+
+                <button
+                    onClick={toggleListening}
+                    className={`w-16 h-16 rounded-full flex items-center justify-center transition-all transform hover:scale-105 ${
+                        isListening 
+                        ? 'bg-red-500 hover:bg-red-600 shadow-[0_0_30px_rgba(239,68,68,0.4)]' 
+                        : 'bg-white hover:bg-slate-100 shadow-[0_0_30px_rgba(255,255,255,0.1)]'
+                    }`}
+                >
+                    {isListening ? <Mic className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-slate-900" />}
+                </button>
+            </div>
+        )}
+
+        {/* Last Message Context (Only show if session started) */}
+        {voiceSessionStarted && (
+            <div className="absolute bottom-0 w-full p-6 bg-gradient-to-t from-slate-900 via-slate-900/90 to-transparent">
+                <div className="max-w-md mx-auto text-center">
+                    {messages.length > 0 && messages[messages.length - 1].role === 'model' && (
+                        <p className="text-slate-300 text-sm italic opacity-80 line-clamp-2">
+                            "{messages[messages.length - 1].text}"
+                        </p>
                     )}
                 </div>
             </div>
-
-            <div className="h-12 flex items-center gap-1 mb-8">
-                {isListening ? (
-                    <>
-                        <div className="w-2 rounded-full animate-wave" style={{backgroundColor: 'var(--theme-primary)'}}></div>
-                        <div className="w-2 rounded-full animate-wave animate-wave-delay-1" style={{backgroundColor: 'var(--theme-primary)'}}></div>
-                        <div className="w-2 rounded-full animate-wave animate-wave-delay-2" style={{backgroundColor: 'var(--theme-primary)'}}></div>
-                        <div className="w-2 rounded-full animate-wave animate-wave-delay-3" style={{backgroundColor: 'var(--theme-primary)'}}></div>
-                        <div className="w-2 rounded-full animate-wave animate-wave-delay-4" style={{backgroundColor: 'var(--theme-primary)'}}></div>
-                    </>
-                ) : (
-                    <span className="text-slate-400 text-sm font-medium tracking-wide">
-                        {isLoading ? "GEMMA IS THINKING..." : "TAP TO SPEAK"}
-                    </span>
-                )}
-            </div>
-
-            <button
-                onClick={toggleListening}
-                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all transform hover:scale-105 ${
-                    isListening 
-                    ? 'bg-red-500 hover:bg-red-600 shadow-[0_0_30px_rgba(239,68,68,0.4)]' 
-                    : 'bg-white hover:bg-slate-100 shadow-[0_0_30px_rgba(255,255,255,0.1)]'
-                }`}
-            >
-                {isListening ? <Mic className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-slate-900" />}
-            </button>
-        </div>
-
-        {/* Last Message Context */}
-        <div className="absolute bottom-0 w-full p-6 bg-gradient-to-t from-slate-900 via-slate-900/90 to-transparent">
-             <div className="max-w-md mx-auto text-center">
-                 {messages.length > 0 && messages[messages.length - 1].role === 'model' && (
-                     <p className="text-slate-300 text-sm italic opacity-80 line-clamp-2">
-                        "{messages[messages.length - 1].text}"
-                     </p>
-                 )}
-             </div>
-        </div>
+        )}
     </div>
   );
 
