@@ -4,6 +4,7 @@ import { Step, BrandingData, BoardMember, CampaignData } from '../types';
 import { STEPS_INFO } from '../constants';
 import { Globe, ArrowRight, ExternalLink, Copy, Check, Palette, Info, Construction, TrendingUp, Users, DollarSign, Download, BarChart3, Upload } from 'lucide-react';
 import OrgChart from './OrgChart';
+import stationaryImage from '../src/assets/stationary.jpeg';
 
 interface BrowserWindowProps {
   currentStep: Step;
@@ -154,15 +155,15 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({ currentStep, browserUrl, 
   const renderBranding = () => {
     if (!brandingData) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-slate-400 p-8 text-center">
-          <Palette className="w-16 h-16 mb-6 opacity-30 text-blue-500" />
-          <h3 className="text-lg font-medium text-slate-600 mb-2">Brand Identity Design</h3>
-          <p className="max-w-xs mx-auto">
-            Ask Gemma to generate a color palette for your non-profit, or use the <strong>Theme</strong> selector in the top bar.
+        <div className="flex flex-col items-center justify-center h-full p-8">
+          <img
+            src={stationaryImage}
+            alt="Branded Stationary Preview"
+            className="w-full max-w-2xl rounded-lg shadow-2xl"
+          />
+          <p className="mt-6 text-sm text-slate-500 text-center max-w-md">
+            Gemma will guide you through creating your nonprofit's brand identity with custom colors and typography.
           </p>
-          <div className="mt-6 text-sm bg-slate-100 px-4 py-2 rounded-lg text-slate-500">
-            Try: "Design a hopeful, nature-inspired brand for my environmental charity."
-          </div>
         </div>
       );
     }
@@ -179,7 +180,7 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({ currentStep, browserUrl, 
         { id: 4, name: "Tech Mono", font: "monospace", weight: "500", tracking: "tighter", transform: "uppercase" }
     ];
 
-    const displayOrgName = orgName || "Green Earth TX";
+    const displayOrgName = orgName !== 'TBD' ? orgName : "Wear it Forward";
 
     return (
       <div className="space-y-8 pb-10">
@@ -265,25 +266,16 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({ currentStep, browserUrl, 
         {/* 3. Preview & Continue */}
         <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
             <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Preview</h3>
-            
-            {/* Mock Business Card Preview */}
-            <div className="aspect-[1.75/1] bg-white rounded-lg shadow-lg shadow-slate-200/50 border border-slate-200 overflow-hidden max-w-md mx-auto mb-6 relative">
+
+            {/* Branded Letter Image Preview */}
+            <div className="aspect-[16/9] bg-white rounded-lg shadow-lg shadow-slate-200/50 border border-slate-200 overflow-hidden max-w-2xl mx-auto mb-6 relative">
                 {generatedLogo ? (
-                    <img src={generatedLogo} alt="Generated Brand Preview" className="w-full h-full object-cover" />
+                    <img src={generatedLogo} alt="Person receiving branded letter" className="w-full h-full object-cover" />
                 ) : (
-                    <div className="relative w-full h-full group bg-slate-100 flex items-center justify-center">
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <div
-                                className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-xl shadow-sm border border-white/50 text-xl transition-transform group-hover:scale-105"
-                                style={{
-                                    color: primaryColor,
-                                    fontFamily: logoStyles.find(s => s.id === selectedLogo)?.font || 'sans-serif',
-                                    fontWeight: logoStyles.find(s => s.id === selectedLogo)?.weight || '700',
-                                    textTransform: logoStyles.find(s => s.id === selectedLogo)?.transform as any || 'none'
-                                }}
-                            >
-                                {displayOrgName}
-                            </div>
+                    <div className="relative w-full h-full group bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-8">
+                        <div className="text-center text-slate-400">
+                            <div className="text-sm mb-2">Select your branding preferences above</div>
+                            <div className="text-xs">Gemma will generate a preview image of your branded materials</div>
                         </div>
                     </div>
                 )}
@@ -346,31 +338,45 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({ currentStep, browserUrl, 
                   </div>
               )}
 
-              {/* Generated Images */}
+              {/* Generated Campaign Images with Quote Overlays */}
               {campaignData.generatedImages.length > 0 && (
                   <div>
-                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Ready to Share</h3>
-                      <div className="grid grid-cols-1 gap-6">
+                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">
+                          {campaignData.isGenerating ? `Generating Campaign Posts (${campaignData.generatedImages.length}/4)...` : 'Campaign Posts Ready to Share'}
+                      </h3>
+                      <div className="grid grid-cols-2 gap-4">
                           {campaignData.generatedImages.map((img, idx) => (
-                              <div key={idx} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                  <img src={img} alt="Social Post" className="w-full rounded-lg shadow-md mb-4" />
+                              <div key={idx} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm group hover:shadow-lg transition-shadow">
+                                  <div className="aspect-square relative overflow-hidden rounded-lg mb-3">
+                                      <img src={img} alt={`Campaign Post ${idx + 1}`} className="w-full h-full object-cover" />
+                                  </div>
                                   <div className="flex justify-between items-center">
-                                      <span className="text-xs text-slate-400">Generated by Imagen 3</span>
-                                      <button className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-medium rounded-lg hover:bg-slate-800">
+                                      <span className="text-[10px] text-slate-400">Post {idx + 1}/4</span>
+                                      <button className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-medium rounded-lg hover:bg-slate-800 opacity-0 group-hover:opacity-100 transition-opacity">
                                           <Download className="w-3 h-3" />
                                           Download
                                       </button>
                                   </div>
                               </div>
                           ))}
+                          {/* Placeholder slots for remaining images */}
+                          {campaignData.isGenerating && Array.from({ length: 4 - campaignData.generatedImages.length }).map((_, idx) => (
+                              <div key={`placeholder-${idx}`} className="bg-slate-50 p-3 rounded-xl border border-slate-200 border-dashed">
+                                  <div className="aspect-square relative overflow-hidden rounded-lg mb-3 bg-slate-100 flex items-center justify-center">
+                                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                                  </div>
+                                  <div className="text-center text-[10px] text-slate-400">Generating...</div>
+                              </div>
+                          ))}
                       </div>
                   </div>
               )}
-              
-              {campaignData.isGenerating && (
-                  <div className="flex items-center justify-center p-8 text-slate-500 gap-3">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-                      Creating your masterpiece...
+
+              {campaignData.isGenerating && campaignData.generatedImages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center p-12 text-slate-500 gap-3">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                      <p className="text-sm font-medium">Creating 4 stunning campaign posts with quote overlays...</p>
+                      <p className="text-xs text-slate-400">Using Gemini 3 Pro Image Preview</p>
                   </div>
               )}
           </div>

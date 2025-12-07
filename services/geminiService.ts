@@ -58,6 +58,19 @@ export const initializeChat = (): Chat => {
               },
               required: ["name"]
             }
+          },
+          {
+            name: "generate_branded_letter",
+            description: "Generates an AI image using gemini-3-pro-image-preview of a person receiving a letter with the organization's branding. Call this after user finalizes their color palette and logo style selection.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                orgName: { type: "STRING", description: "The nonprofit organization name" },
+                primaryColor: { type: "STRING", description: "Primary brand color hex code (e.g., #FF6B6B)" },
+                logoStyle: { type: "STRING", description: "Logo style: Modern Minimal, Classic Serif, Friendly Round, or Tech Mono" }
+              },
+              required: ["orgName", "primaryColor", "logoStyle"]
+            }
           }
         ]
       }]
@@ -72,7 +85,8 @@ export const sendMessageToGemini = async (
   onNavigate?: (url: string) => void,
   imageData?: string,
   onAddBoardMember?: (member: BoardMember) => void,
-  onSetOrgName?: (name: string) => void
+  onSetOrgName?: (name: string) => void,
+  onGenerateBrandedLetter?: (imageUrl: string) => Promise<void>
 ): Promise<string> => {
   if (!chatSession) {
     initializeChat();
@@ -172,6 +186,32 @@ export const sendMessageToGemini = async (
                     }
                 });
             }
+
+            if (call && call.name === 'generate_branded_letter') {
+                const orgName = call.args?.orgName as string;
+                const primaryColor = call.args?.primaryColor as string;
+                const logoStyle = call.args?.logoStyle as string;
+                console.log(`Generating branded letter for: ${orgName}, Color: ${primaryColor}, Style: ${logoStyle}`);
+
+                const prompt = `Professional photo of a smiling person opening a beautifully designed letter from "${orgName}" nonprofit. The envelope and letterhead feature elegant branding with ${primaryColor} as the primary color and ${logoStyle} typography style. The scene is warm and inviting, with soft natural lighting. The person looks happy and engaged. High quality, photorealistic, 4k.`;
+
+                // Generate image using gemini-3-pro-image-preview
+                const imageUrl = await generateBrandedLetterImage(prompt);
+
+                // Send image URL via callback
+                if (onGenerateBrandedLetter && imageUrl) {
+                    await onGenerateBrandedLetter(imageUrl);
+                }
+
+                toolResponses.push({
+                    functionResponse: {
+                        name: 'generate_branded_letter',
+                        response: {
+                            result: imageUrl ? `Generated branded letter image for "${orgName}" with ${logoStyle} style.` : 'Failed to generate image.'
+                        }
+                    }
+                });
+            }
         }
 
         // Send tool response back to model to get the final text response
@@ -194,22 +234,57 @@ export const generateLogo = async (prompt: string): Promise<string | null> => {
   if (!apiKey) throw new Error("API_KEY is missing");
 
   const ai = new GoogleGenAI({ apiKey });
-  // Using the model requested by user context or standard imagen
-  const model = ai.getGenerativeModel({ model: "imagen-3.0-generate-001" });
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    
+    // Using gemini-3-pro-image-preview for high-quality logo generation
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-image-preview",
+      contents: prompt
+    });
+
     // Check for inline data (base64 image)
-    const part = response.candidates?.[0]?.content?.parts?.[0];
-    if (part && 'inlineData' in part && part.inlineData) {
-        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+    const parts = response.candidates?.[0]?.content?.parts;
+    if (parts) {
+      for (const part of parts) {
+        if (part.inlineData) {
+          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+      }
     }
-    
+
     return null;
   } catch (error) {
     console.error("Logo generation error:", error);
+    return null;
+  }
+};
+
+export const generateBrandedLetterImage = async (prompt: string): Promise<string | null> => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) throw new Error("API_KEY is missing");
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  try {
+    // Using gemini-3-pro-image-preview for high-fidelity image generation with reasoning
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-image-preview",
+      contents: prompt
+    });
+
+    // Check for inline data (base64 image)
+    const parts = response.candidates?.[0]?.content?.parts;
+    if (parts) {
+      for (const part of parts) {
+        if (part.inlineData) {
+          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Branded letter image generation error:", error);
     return null;
   }
 };
@@ -219,26 +294,27 @@ export const analyzePdfForQuotes = async (base64Data: string): Promise<string[]>
   if (!apiKey) throw new Error("API_KEY is missing");
 
   const ai = new GoogleGenAI({ apiKey });
-  // User requested gemini-3-pro-preview for PDF review
-  const model = ai.getGenerativeModel({ model: "gemini-3-pro-preview" });
 
   try {
-    const result = await model.generateContent({
+    // Using gemini-3-pro-preview with proper API
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-preview",
       contents: [
         {
           role: 'user',
           parts: [
-            { text: "Analyze this PDF and extract 3-5 short, impactful, and shareable quotes or statistics that would be perfect for an Instagram post. Return ONLY a JSON array of strings, e.g., [\"Quote 1\", \"Quote 2\"]." },
+            { text: "Analyze this document and extract EXACTLY 4 short, impactful quotes or statistics that would be perfect for social media posts. Each quote should be concise (under 100 characters), emotionally compelling, and shareable. Return ONLY a JSON array of 4 strings, e.g., [\"Quote 1\", \"Quote 2\", \"Quote 3\", \"Quote 4\"]." },
             { inlineData: { mimeType: 'application/pdf', data: base64Data } }
           ]
         }
       ]
     });
 
-    const text = result.response.text();
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const jsonMatch = text.match(/\[.*\]/s);
     if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        const quotes = JSON.parse(jsonMatch[0]);
+        return quotes.slice(0, 4); // Ensure exactly 4 quotes
     }
     return [];
   } catch (error) {
@@ -247,8 +323,39 @@ export const analyzePdfForQuotes = async (base64Data: string): Promise<string[]>
   }
 };
 
+export const generateSocialImageWithQuote = async (quote: string, orgName: string, brandColors: string[]): Promise<string | null> => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) throw new Error("API_KEY is missing");
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  try {
+    // Generate image with quote overlay using gemini-3-pro-image-preview
+    const prompt = `Create a stunning Instagram post background image with the quote "${quote}" prominently displayed in elegant, bold typography. The text should be the main focus, clearly readable, and beautifully integrated into the composition. Style: Modern, inspiring, professional. Use colors from this palette: ${brandColors.join(', ')}. The overall design should be eye-catching and shareable on social media. Include "${orgName}" subtly at the bottom. High quality, photorealistic or clean illustration.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-image-preview",
+      contents: prompt
+    });
+
+    // Check for inline data (base64 image)
+    const parts = response.candidates?.[0]?.content?.parts;
+    if (parts) {
+      for (const part of parts) {
+        if (part.inlineData) {
+          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Social image generation error:", error);
+    return null;
+  }
+};
+
+// Legacy function for backwards compatibility
 export const generateSocialImage = async (prompt: string): Promise<string | null> => {
-    // Re-use the logo generation logic but with a different prompt context if needed
-    // or just alias it. The underlying model is the same.
     return generateLogo(prompt);
 };

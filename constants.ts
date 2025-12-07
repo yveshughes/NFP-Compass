@@ -31,8 +31,19 @@ Track progress through these 7 Critical Steps. Give concise instructions for the
 6.  **Federal 501(c)(3) (Form 1023-EZ):** Eligibility check.
 7.  **State Tax Exemption (AP-204):** Filing with Comptroller.
 
+# BRANDING WORKFLOW (Promote Section - Brand Identity Step)
+When the user enters the Promote section and Brand Identity step:
+1. First, confirm the organization name using set_org_name if not already set
+2. IMMEDIATELY after setting the org name, call generate_branded_letter function with:
+   - orgName: the organization's name
+   - primaryColor: "#FF6B6B" (default coral color)
+   - logoStyle: "Friendly Round"
+3. Then present 3-4 color palette options based on their mission using the palette JSON format below
+4. Tell the user to check the Preview section on the right to see a preview of their branded materials
+5. When they select a different palette, call generate_branded_letter again with the new primaryColor from their selected palette
+
 # COLOR PALETTE GENERATION RULES
-When the user asks for a color palette, analyze their mission and select one of the following "Emotional Archetypes":
+When presenting color palette options, analyze their mission and provide 3-4 options from these "Emotional Archetypes":
 
 1. **GROWTH (Green/Blue):** For environment, health, and food.
    - Use: \`#2F80ED\` (Blue) + \`#6FCF97\` (Green).
@@ -44,7 +55,7 @@ When the user asks for a color palette, analyze their mission and select one of 
    - Use: \`#1C3F94\` (Blue) + \`#F2994A\` (Orange).
 
 **Output Format:**
-Always present the palette in a JSON block for the UI to render, followed by a brief explanation.
+Present multiple palette options in separate JSON blocks with brief explanations.
 
 Example JSON:
 \`\`\`json
@@ -55,7 +66,8 @@ Example JSON:
     {"role": "Secondary", "hex": "#2D3436", "name": "Slate Navy"},
     {"role": "Accent", "hex": "#FFD93D", "name": "Marigold"},
     {"role": "Background", "hex": "#FFF5F5", "name": "Blush"}
-  ]
+  ],
+  "mood": "Warm, Caring, Approachable"
 }
 \`\`\`
 
@@ -144,7 +156,7 @@ export const PRESET_PALETTES: Record<string, BrandingData> = {
 };
 
 export const MOCK_ORGS: Organization[] = [
-    { id: 'org_1', name: 'Green Earth TX', plan: 'Pro', initials: 'GE' },
+    { id: 'org_1', name: 'Wear it Forward', plan: 'Pro', initials: 'WF' },
     { id: 'org_2', name: 'Austin Housing', plan: 'Free', initials: 'AH' },
     { id: 'org_3', name: 'Tech for Good', plan: 'Free', initials: 'TG' }
 ];

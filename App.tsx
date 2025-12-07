@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Step, Message, AppState, AppSection, BrandingData, Organization } from './types';
-import { sendMessageToGemini, initializeChat, generateLogo, analyzePdfForQuotes, generateSocialImage } from './services/geminiService';
+import { sendMessageToGemini, initializeChat, generateLogo, analyzePdfForQuotes, generateSocialImage, generateSocialImageWithQuote } from './services/geminiService';
 import { createSteelSession, navigateSteelSession } from './services/steelService';
 import ProgressBar from './components/ProgressBar';
 import ChatInterface from './components/ChatInterface';
@@ -260,6 +260,10 @@ const App: React.FC = () => {
             (name) => {
                 console.log("Setting org name:", name);
                 setState(prev => ({ ...prev, orgName: name }));
+            },
+            async (imageUrl: string) => {
+                console.log("Generated branded letter image:", imageUrl);
+                setState(prev => ({ ...prev, generatedLogo: imageUrl }));
             }
         );
         
@@ -357,19 +361,48 @@ const App: React.FC = () => {
   const handleFileUpload = async (file: File) => {
       setState(prev => ({
           ...prev,
-          campaignData: { ...prev.campaignData, isAnalyzing: true, uploadedFileName: file.name }
+          campaignData: { ...prev.campaignData, isAnalyzing: true, uploadedFileName: file.name, generatedImages: [] }
       }));
 
       const reader = new FileReader();
       reader.onload = async (e) => {
           const base64 = (e.target?.result as string).split(',')[1];
           const quotes = await analyzePdfForQuotes(base64);
+
           setState(prev => ({
               ...prev,
-              campaignData: { 
-                  ...prev.campaignData, 
-                  isAnalyzing: false, 
-                  extractedQuotes: quotes 
+              campaignData: {
+                  ...prev.campaignData,
+                  isAnalyzing: false,
+                  extractedQuotes: quotes,
+                  isGenerating: true
+              }
+          }));
+
+          // Automatically generate all 4 images with quotes overlaid
+          const brandColors = state.brandingData?.colors.map(c => c.hex) || ['#FF6B6B', '#2D3436', '#FFD93D'];
+          const images: string[] = [];
+
+          for (const quote of quotes) {
+              const image = await generateSocialImageWithQuote(quote, state.orgName, brandColors);
+              if (image) {
+                  images.push(image);
+                  // Update state after each image is generated for progressive display
+                  setState(prev => ({
+                      ...prev,
+                      campaignData: {
+                          ...prev.campaignData,
+                          generatedImages: [...prev.campaignData.generatedImages, image]
+                      }
+                  }));
+              }
+          }
+
+          setState(prev => ({
+              ...prev,
+              campaignData: {
+                  ...prev.campaignData,
+                  isGenerating: false
               }
           }));
       };
