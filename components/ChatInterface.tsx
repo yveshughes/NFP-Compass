@@ -416,8 +416,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
     // Draw current video frame
     ctx.drawImage(video, 0, 0);
 
-    // Convert to base64
-    const base64Image = canvas.toDataURL('image/jpeg').split(',')[1];
+    // Convert to base64 PNG (keep full data URL for geminiService to process)
+    const base64Image = canvas.toDataURL('image/png');
 
     // Send to Gemini with general prompt - let user type what they want
     onSendMessage(
