@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Step, Message, AppState, AppSection, BrandingData, Organization } from './types';
-import { sendMessageToGemini, initializeChat } from './services/geminiService';
+import { sendMessageToGemini, initializeChat, generateLogo, analyzePdfForQuotes, generateSocialImage } from './services/geminiService';
+import { createSteelSession, navigateSteelSession } from './services/steelService';
 import ProgressBar from './components/ProgressBar';
 import ChatInterface from './components/ChatInterface';
 import BrowserWindow from './components/BrowserWindow';
@@ -11,6 +12,10 @@ import { INITIAL_GREETING, MOCK_ORGS } from './constants';
 
 const App: React.FC = () => {
   const [hasLaunched, setHasLaunched] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [chatWidth, setChatWidth] = useState(50); // Percentage
+  const [isDragging, setIsDragging] = useState(false);
+
   const [state, setState] = useState<AppState>({
     currentSection: AppSection.Incorporate,
     currentStep: Step.Onboarding,
@@ -19,7 +24,18 @@ const App: React.FC = () => {
     browserUrl: null,
     brandingData: null,
     supplementalProvisionText: null,
-    activeOrg: MOCK_ORGS[0] // Default to first mock org
+    activeOrg: MOCK_ORGS[0], // Default to first mock org
+    screenshot: null,
+    boardMembers: [],
+    generatedLogo: null,
+    campaignData: {
+        uploadedFileName: null,
+        extractedQuotes: [],
+        generatedImages: [],
+        isAnalyzing: false,
+        isGenerating: false
+    },
+    orgName: 'TBD'
   });
 
   // --- COLOR UTILITIES ---
@@ -45,6 +61,50 @@ const App: React.FC = () => {
     
     return "#" + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 + (G<255?G<1?0:G:255)*0x100 + (B<255?B<1?0:B:255)).toString(16).slice(1);
   };
+
+  // --- RESIZER HANDLERS ---
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      
+      // Calculate percentage based on window width
+      // We need to account for the sidebar width (approx 256px or 64px)
+      // But for simplicity, let's just use the clientX relative to the flex container
+      // The flex container starts after the sidebar.
+      
+      // Actually, simpler approach:
+      // The main content area is flex-1.
+      // Let's assume the sidebar is fixed width.
+      // We can just use the movement to adjust percentage.
+      
+      const containerWidth = window.innerWidth; // Approximation
+      const newWidth = (e.clientX / containerWidth) * 100;
+      
+      // Clamp between 20% and 80%
+      if (newWidth > 20 && newWidth < 80) {
+        setChatWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   // --- DYNAMIC THEME INJECTION ---
   useEffect(() => {
@@ -87,6 +147,7 @@ const App: React.FC = () => {
                 timestamp: Date.now()
             }]
         }));
+        // Don't navigate anywhere yet - wait for Gemma to trigger navigation
       } catch (e) {
         console.error("Failed to init chat", e);
       }
@@ -107,11 +168,25 @@ const App: React.FC = () => {
       }));
   };
 
+  // --- PARSERS ---
   const parseStepFromResponse = (text: string): Step | null => {
     const match = text.match(/\[STEP:\s*(\d+)\]/);
     if (match && match[1]) {
       const stepNum = parseInt(match[1], 10);
       return stepNum in Step ? stepNum : null;
+    }
+    return null;
+  };
+
+  const parseOrgNameFromResponse = (text: string): string | null => {
+    const match = text.match(/\[ORG_NAME:\s*(.*?)\]/);
+    if (match) {
+        let name = match[1].trim();
+        // Remove surrounding quotes if present
+        if ((name.startsWith('"') && name.endsWith('"')) || (name.startsWith("'") && name.endsWith("'"))) {
+            name = name.slice(1, -1);
+        }
+        return name;
     }
     return null;
   };
@@ -151,7 +226,7 @@ const App: React.FC = () => {
       return null;
   };
 
-  const handleSendMessage = async (text: string) => {
+  const handleSendMessage = async (text: string, image?: string) => {
     // Add User Message
     const userMsg: Message = {
         id: Date.now().toString(),
@@ -163,19 +238,40 @@ const App: React.FC = () => {
     setState(prev => ({
         ...prev,
         messages: [...prev.messages, userMsg],
-        isLoading: true
+        isLoading: true,
+        screenshot: image || prev.screenshot // Store the screenshot
     }));
 
     try {
-        const responseText = await sendMessageToGemini(text);
+        const responseText = await sendMessageToGemini(
+            text,
+            (url) => {
+                console.log("Navigating to:", url);
+                setState(prev => ({ ...prev, browserUrl: url }));
+            },
+            image,
+            (member) => {
+                console.log("Adding board member:", member);
+                setState(prev => ({
+                    ...prev,
+                    boardMembers: [...prev.boardMembers, member]
+                }));
+            },
+            (name) => {
+                console.log("Setting org name:", name);
+                setState(prev => ({ ...prev, orgName: name }));
+            }
+        );
         
         // Parse State Updates
         const newStep = parseStepFromResponse(responseText);
         const newPalette = parsePaletteFromResponse(responseText);
+        const newOrgName = parseOrgNameFromResponse(responseText);
         const provision = parseProvisionText(responseText);
 
         // Remove hidden tags and JSON blocks from display text to keep chat clean
         let cleanText = responseText.replace(/\[STEP:\s*\d+\]/g, '').trim();
+        cleanText = cleanText.replace(/\[ORG_NAME:.*?\]/g, '');
         cleanText = cleanText.replace(/```json[\s\S]*?```/, '(I have updated the visual brand panel for you!)');
 
         const botMsg: Message = {
@@ -191,7 +287,12 @@ const App: React.FC = () => {
             isLoading: false,
             currentStep: newStep !== null ? newStep : prev.currentStep,
             brandingData: newPalette || prev.brandingData,
-            supplementalProvisionText: provision || prev.supplementalProvisionText
+            supplementalProvisionText: provision || prev.supplementalProvisionText,
+            activeOrg: newOrgName ? { 
+                ...prev.activeOrg!, 
+                name: newOrgName,
+                initials: newOrgName.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
+            } : prev.activeOrg
         }));
 
     } catch (error) {
@@ -228,6 +329,80 @@ const App: React.FC = () => {
     }));
   }
 
+  const handleClearDemoData = () => {
+    // Clear demo data and reset to initial state
+    setState(prev => ({
+        ...prev,
+        messages: [{
+            id: 'init',
+            role: 'model',
+            text: INITIAL_GREETING,
+            timestamp: Date.now()
+        }],
+        brandingData: null,
+        supplementalProvisionText: null,
+        generatedLogo: null
+    }));
+  }
+
+  const handleGenerateLogo = async (style: string) => {
+      const prompt = `High-quality professional photo of office stationary, business cards, and letterhead featuring the logo of a non-profit named "${state.activeOrg?.name}". The logo style is ${style}. Colors: ${state.brandingData?.colors.map(c => c.hex).join(', ')}. Photorealistic, elegant, soft lighting, 4k.`;
+      
+      const logoData = await generateLogo(prompt);
+      if (logoData) {
+          setState(prev => ({ ...prev, generatedLogo: logoData }));
+      }
+  };
+
+  const handleFileUpload = async (file: File) => {
+      setState(prev => ({
+          ...prev,
+          campaignData: { ...prev.campaignData, isAnalyzing: true, uploadedFileName: file.name }
+      }));
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+          const base64 = (e.target?.result as string).split(',')[1];
+          const quotes = await analyzePdfForQuotes(base64);
+          setState(prev => ({
+              ...prev,
+              campaignData: { 
+                  ...prev.campaignData, 
+                  isAnalyzing: false, 
+                  extractedQuotes: quotes 
+              }
+          }));
+      };
+      reader.readAsDataURL(file);
+  };
+
+  const handleGenerateSocialPost = async (quote: string) => {
+      setState(prev => ({
+          ...prev,
+          campaignData: { ...prev.campaignData, isGenerating: true }
+      }));
+
+      const prompt = `Instagram post background for a non-profit named "${state.activeOrg?.name}". Quote to overlay: "${quote}". Style: Modern, inspiring, clean. Colors: ${state.brandingData?.colors.map(c => c.hex).join(', ')}. High quality, photorealistic or elegant vector art. No text in the image itself, just background.`;
+
+      const image = await generateSocialImage(prompt);
+      
+      if (image) {
+          setState(prev => ({
+              ...prev,
+              campaignData: { 
+                  ...prev.campaignData, 
+                  isGenerating: false,
+                  generatedImages: [image, ...prev.campaignData.generatedImages]
+              }
+          }));
+      } else {
+           setState(prev => ({
+              ...prev,
+              campaignData: { ...prev.campaignData, isGenerating: false }
+          }));
+      }
+  };
+
   if (!hasLaunched) {
       return <LandingPage onLaunch={handleLaunch} />;
   }
@@ -247,30 +422,46 @@ const App: React.FC = () => {
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-white relative">
         
         {/* Sidebar Navigation */}
-        <ProgressBar 
-            currentStep={state.currentStep} 
+        <ProgressBar
+            currentStep={state.currentStep}
             currentSection={state.currentSection}
             onStepSelect={handleStepSelect}
             activeOrg={state.activeOrg}
             onOrgChange={handleOrgChange}
+            onClearDemoData={handleClearDemoData}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            orgName={state.orgName}
+            onOrgNameChange={(name) => setState(prev => ({ ...prev, orgName: name }))}
         />
 
         {/* Left Pane: Chat */}
         <div className="w-full md:w-1/2 h-1/2 md:h-full border-r border-slate-200">
-            <ChatInterface 
-                messages={state.messages} 
-                isLoading={state.isLoading} 
-                onSendMessage={handleSendMessage} 
+            <ChatInterface
+                messages={state.messages}
+                isLoading={state.isLoading}
+                onSendMessage={handleSendMessage}
+                onNavigate={(url) => setState(prev => ({ ...prev, browserUrl: url }))}
+                onFileUpload={handleFileUpload}
             />
         </div>
 
         {/* Right Pane: Browser/Context */}
-        <div className="w-full md:w-1/2 h-1/2 md:h-full">
-            <BrowserWindow 
-                currentStep={state.currentStep} 
+        <div className="flex-1 h-1/2 md:h-full overflow-hidden">
+            <BrowserWindow
+                currentStep={state.currentStep}
                 browserUrl={state.browserUrl}
                 brandingData={state.brandingData}
                 supplementalText={state.supplementalProvisionText}
+                screenshot={null}
+                boardMembers={[]}
+                onContinue={() => setState(prev => ({ ...prev, currentStep: Step.CreateCampaigns }))}
+                orgName={state.activeOrg?.name}
+                generatedLogo={state.generatedLogo}
+                onGenerateLogo={handleGenerateLogo}
+                campaignData={state.campaignData}
+                onFileUpload={handleFileUpload}
+                onGenerateSocialPost={handleGenerateSocialPost}
             />
         </div>
 

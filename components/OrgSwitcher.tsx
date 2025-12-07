@@ -1,24 +1,43 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronsUpDown, Check, Plus, Settings, LogOut, Building2 } from 'lucide-react';
+import { ChevronsUpDown, Check, Plus, Settings, LogOut, Building2, Trash2 } from 'lucide-react';
 import { Organization } from '../types';
 import { MOCK_ORGS } from '../constants';
 
 interface OrgSwitcherProps {
   currentOrg: Organization | null;
   onSwitch: (org: Organization) => void;
+  onClearDemoData: () => void;
+  orgName: string;
+  onOrgNameChange: (name: string) => void;
 }
 
-const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentOrg, onSwitch }) => {
+const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentOrg, onSwitch, onClearDemoData, orgName, onOrgNameChange }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(orgName);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Update edit value when orgName changes
+  useEffect(() => {
+    setEditValue(orgName);
+  }, [orgName]);
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
 
   // Close when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        menuRef.current && 
+        menuRef.current &&
         !menuRef.current.contains(event.target as Node) &&
         buttonRef.current &&
         !buttonRef.current.contains(event.target as Node)
@@ -29,6 +48,22 @@ const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentOrg, onSwitch }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleSaveName = () => {
+    if (editValue.trim()) {
+      onOrgNameChange(editValue.trim());
+      setIsEditing(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveName();
+    } else if (e.key === 'Escape') {
+      setEditValue(orgName);
+      setIsEditing(false);
+    }
+  };
 
   if (!currentOrg) return null;
 
@@ -76,6 +111,18 @@ const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentOrg, onSwitch }) => {
             <div className="h-px bg-slate-800 my-1"></div>
 
             <div className="p-2">
+                <button 
+                    onClick={() => {
+                        if (window.confirm('Are you sure you want to clear all demo data and reset the application?')) {
+                            onClearDemoData();
+                            setIsOpen(false);
+                        }
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-red-900/20 hover:text-red-400 transition-colors text-sm text-slate-300 group"
+                >
+                    <Trash2 className="w-4 h-4 text-slate-500 group-hover:text-red-400" />
+                    Clear Demo Data
+                </button>
                 <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors text-sm text-slate-300">
                     <Settings className="w-4 h-4 text-slate-500" />
                     Settings
@@ -94,17 +141,36 @@ const OrgSwitcher: React.FC<OrgSwitcherProps> = ({ currentOrg, onSwitch }) => {
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 border ${isOpen ? 'bg-slate-800 border-slate-700' : 'bg-slate-900 border-transparent hover:bg-slate-800'}`}
       >
-        <div 
+        <div
             className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold text-white shadow-sm shrink-0"
             style={{ backgroundColor: 'var(--theme-primary)' }}
         >
-            {currentOrg.initials}
+            TX
         </div>
         
-        <div className="flex flex-col items-start overflow-hidden">
-            <span className="text-sm font-semibold text-slate-200 truncate w-full text-left">
-                {currentOrg.name}
-            </span>
+        <div className="flex flex-col items-start overflow-hidden flex-1">
+            {isEditing ? (
+              <input
+                ref={inputRef}
+                type="text"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={handleSaveName}
+                onKeyDown={handleKeyDown}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full text-sm font-semibold bg-slate-800 text-slate-200 border border-slate-600 rounded px-2 py-1 focus:outline-none focus:border-blue-500"
+              />
+            ) : (
+              <span
+                className="text-sm font-semibold text-slate-200 truncate w-full text-left cursor-text hover:text-blue-400 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsEditing(true);
+                }}
+              >
+                {orgName}
+              </span>
+            )}
             <span className="text-[10px] text-slate-500 font-medium">
                 {currentOrg.plan} Plan
             </span>

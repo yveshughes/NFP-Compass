@@ -1,18 +1,30 @@
 
 import React from 'react';
-import { Step, BrandingData } from '../types';
+import { Step, BrandingData, BoardMember, CampaignData } from '../types';
 import { STEPS_INFO } from '../constants';
-import { Globe, ArrowRight, ExternalLink, Copy, Check, Palette, Info, Construction, TrendingUp, Users, DollarSign, Download, BarChart3 } from 'lucide-react';
+import { Globe, ArrowRight, ExternalLink, Copy, Check, Palette, Info, Construction, TrendingUp, Users, DollarSign, Download, BarChart3, Upload } from 'lucide-react';
+import OrgChart from './OrgChart';
 
 interface BrowserWindowProps {
   currentStep: Step;
   browserUrl: string | null;
   brandingData: BrandingData | null;
   supplementalText: string | null;
+  screenshot: string | null;
+  boardMembers: BoardMember[];
+  onContinue?: () => void;
+  orgName?: string;
+  generatedLogo?: string | null;
+  onGenerateLogo?: (style: string) => void;
+  campaignData?: CampaignData;
+  onFileUpload?: (file: File) => void;
+  onGenerateSocialPost?: (quote: string) => void;
 }
 
-const BrowserWindow: React.FC<BrowserWindowProps> = ({ currentStep, browserUrl, brandingData, supplementalText }) => {
+const BrowserWindow: React.FC<BrowserWindowProps> = ({ currentStep, browserUrl, brandingData, supplementalText, screenshot, boardMembers, onContinue, orgName, generatedLogo, onGenerateLogo, campaignData, onFileUpload, onGenerateSocialPost }) => {
   const [copied, setCopied] = React.useState(false);
+  const [selectedLogo, setSelectedLogo] = React.useState<number | null>(null);
+  const [isGenerating, setIsGenerating] = React.useState(false);
 
   const stepInfo = STEPS_INFO[currentStep];
   const displayUrl = browserUrl || stepInfo?.url || 'https://nfpcompass.app/dashboard';
@@ -159,83 +171,210 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({ currentStep, browserUrl, 
     const secondaryColor = brandingData.colors.find(c => c.role === "Secondary")?.hex || '#1e293b';
     const backgroundColor = brandingData.colors.find(c => c.role === "Background")?.hex || '#f8fafc';
 
-    return (
-      <div className="space-y-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-100 relative overflow-hidden">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-6 relative z-10">
-                <div>
-                    <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Active Palette</h3>
-                    <h2 className="text-2xl font-bold text-slate-900">{brandingData.paletteName}</h2>
-                </div>
-                <div className="text-xs font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded">
-                    {brandingData.mood}
-                </div>
-            </div>
+    // Mock Logo Styles
+    const logoStyles = [
+        { id: 1, name: "Modern Minimal", font: "sans-serif", weight: "700", tracking: "tight", transform: "uppercase" },
+        { id: 2, name: "Classic Serif", font: "serif", weight: "600", tracking: "normal", transform: "capitalize" },
+        { id: 3, name: "Friendly Round", font: "sans-serif", weight: "800", tracking: "wide", transform: "lowercase", rounded: true },
+        { id: 4, name: "Tech Mono", font: "monospace", weight: "500", tracking: "tighter", transform: "uppercase" }
+    ];
 
-            {/* Swatches */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
-                {brandingData.colors.map((color, idx) => (
-                    <div key={idx} className="group cursor-pointer">
-                        <div className="h-24 rounded-lg shadow-sm mb-2 transition-transform group-hover:scale-[1.02] ring-1 ring-black/5" style={{backgroundColor: color.hex}}></div>
-                        <div className="flex flex-col">
-                            <span className="text-xs font-bold text-slate-700">{color.name}</span>
-                            <span className="text-[10px] text-slate-400 uppercase">{color.role}</span>
-                            <span className="text-[10px] font-mono text-slate-500">{color.hex}</span>
+    const displayOrgName = orgName || "Green Earth TX";
+
+    return (
+      <div className="space-y-8 pb-10">
+        {/* 1. Logo Selection */}
+        <div>
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">1. Select Logo Style</h3>
+                {onGenerateLogo && (
+                    <button 
+                        onClick={() => {
+                            if (selectedLogo && onGenerateLogo) {
+                                setIsGenerating(true);
+                                const style = logoStyles.find(s => s.id === selectedLogo)?.name || "Modern";
+                                onGenerateLogo(style).finally(() => setIsGenerating(false));
+                            }
+                        }}
+                        disabled={!selectedLogo || isGenerating}
+                        className="text-xs bg-blue-100 text-blue-600 px-3 py-1 rounded-full hover:bg-blue-200 disabled:opacity-50 transition-colors flex items-center gap-1"
+                    >
+                        {isGenerating ? 'Generating...' : '✨ Generate with AI'}
+                    </button>
+                )}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                {logoStyles.map((style) => (
+                    <div 
+                        key={style.id}
+                        onClick={() => setSelectedLogo(style.id)}
+                        className={`aspect-[3/2] bg-white rounded-xl border-2 cursor-pointer transition-all flex flex-col items-center justify-center p-6 relative group ${selectedLogo === style.id ? 'border-[var(--theme-primary)] ring-2 ring-[var(--theme-primary)] ring-opacity-20' : 'border-slate-100 hover:border-slate-300'}`}
+                    >
+                        <div 
+                            className="text-2xl text-center leading-tight transition-colors"
+                            style={{ 
+                                color: selectedLogo === style.id ? primaryColor : '#334155',
+                                fontFamily: style.font,
+                                fontWeight: style.weight,
+                                letterSpacing: style.tracking === 'tight' ? '-0.05em' : style.tracking === 'wide' ? '0.1em' : '0',
+                                textTransform: style.transform as any
+                            }}
+                        >
+                            {displayOrgName}
                         </div>
+                        <div className="absolute bottom-3 text-[10px] text-slate-400 font-medium uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                            {style.name}
+                        </div>
+                        {selectedLogo === style.id && (
+                            <div className="absolute top-3 right-3 w-6 h-6 bg-[var(--theme-primary)] rounded-full flex items-center justify-center text-white">
+                                <Check className="w-3 h-3" />
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>
-
-            {/* Decorative BG */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-slate-50 to-transparent rounded-full -translate-y-1/2 translate-x-1/2 -z-0 pointer-events-none"></div>
         </div>
-        
-        <div className="grid grid-cols-2 gap-4">
-           {/* Mock Business Card */}
-           <div className="aspect-[1.75/1] bg-white rounded-lg shadow-lg shadow-slate-200/50 border border-slate-200 p-6 flex flex-col justify-between relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-transparent to-current opacity-10 rounded-bl-full" style={{color: primaryColor}}></div>
-                <div className="z-10">
-                    <div className="w-8 h-8 rounded mb-2 shadow-sm" style={{backgroundColor: primaryColor}}></div>
-                    <div className="h-3 w-32 bg-slate-800 rounded mb-1"></div>
-                    <div className="h-2 w-20 bg-slate-400 rounded"></div>
+
+        {/* 2. Color Palette Display */}
+        <div>
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">2. Active Color Theme</h3>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 relative overflow-hidden">
+                {/* Header */}
+                <div className="flex justify-between items-center mb-6 relative z-10">
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-900">{brandingData.paletteName}</h2>
+                        <div className="text-xs text-slate-500 mt-1">{brandingData.mood}</div>
+                    </div>
                 </div>
-                <div className="z-10 text-[10px] text-slate-400 flex justify-between items-end">
-                    <span>501(c)(3) Organization</span>
-                    <div className="w-16 h-1 bg-gradient-to-r from-transparent to-current opacity-50" style={{color: secondaryColor}}></div>
+
+                {/* Swatches */}
+                <div className="grid grid-cols-4 gap-3 relative z-10">
+                    {brandingData.colors.map((color, idx) => (
+                        <div key={idx} className="group">
+                            <div className="h-16 rounded-lg shadow-sm mb-2 ring-1 ring-black/5" style={{backgroundColor: color.hex}}></div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-bold text-slate-700 truncate">{color.name}</span>
+                                <span className="text-[9px] font-mono text-slate-400">{color.hex}</span>
+                            </div>
+                        </div>
+                    ))}
                 </div>
+            </div>
+        </div>
+
+        {/* 3. Preview & Continue */}
+        <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Preview</h3>
+            
+            {/* Mock Business Card Preview */}
+            <div className="aspect-[1.75/1] bg-white rounded-lg shadow-lg shadow-slate-200/50 border border-slate-200 overflow-hidden max-w-md mx-auto mb-6 relative">
+                {generatedLogo ? (
+                    <img src={generatedLogo} alt="Generated Brand Preview" className="w-full h-full object-cover" />
+                ) : (
+                    <div className="relative w-full h-full group bg-slate-100 flex items-center justify-center">
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <div
+                                className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-xl shadow-sm border border-white/50 text-xl transition-transform group-hover:scale-105"
+                                style={{
+                                    color: primaryColor,
+                                    fontFamily: logoStyles.find(s => s.id === selectedLogo)?.font || 'sans-serif',
+                                    fontWeight: logoStyles.find(s => s.id === selectedLogo)?.weight || '700',
+                                    textTransform: logoStyles.find(s => s.id === selectedLogo)?.transform as any || 'none'
+                                }}
+                            >
+                                {displayOrgName}
+                            </div>
+                        </div>
+                    </div>
+                )}
            </div>
 
-           {/* Mock Mobile App Header */}
-           <div className="aspect-[9/16] bg-slate-50 rounded-lg shadow-lg shadow-slate-200/50 border border-slate-200 overflow-hidden flex flex-col mx-auto w-1/2 relative">
-                <div className="h-16 flex items-end justify-center pb-3 text-white font-medium text-sm shadow-md z-10" style={{backgroundColor: primaryColor}}>
-                    Dashboard
-                </div>
-                <div className="flex-1 p-3 space-y-2" style={{backgroundColor: backgroundColor}}>
-                     <div className="h-20 rounded-lg bg-white shadow-sm mb-2 flex items-center p-3 gap-2">
-                        <div className="w-8 h-8 rounded-full bg-slate-100" style={{backgroundColor: secondaryColor, opacity: 0.1}}></div>
-                        <div className="flex-1 space-y-1">
-                            <div className="h-2 w-16 bg-slate-200 rounded"></div>
-                            <div className="h-1.5 w-10 bg-slate-100 rounded"></div>
-                        </div>
-                     </div>
-                     <div className="h-32 rounded-lg bg-white shadow-sm p-3">
-                        <div className="h-2 w-24 bg-slate-200 rounded mb-4"></div>
-                        <div className="flex gap-1 items-end h-16">
-                            <div className="flex-1 bg-slate-100 rounded-t" style={{height: '40%'}}></div>
-                            <div className="flex-1 bg-slate-100 rounded-t" style={{height: '70%', backgroundColor: secondaryColor}}></div>
-                            <div className="flex-1 bg-slate-100 rounded-t" style={{height: '50%'}}></div>
-                        </div>
-                     </div>
-                </div>
-                {/* Floating Action Button */}
-                <div className="absolute bottom-4 right-4 w-10 h-10 rounded-full shadow-lg flex items-center justify-center text-white" style={{backgroundColor: secondaryColor}}>
-                    +
-                </div>
+           <div className="flex justify-end">
+                <button 
+                    onClick={onContinue}
+                    disabled={!selectedLogo}
+                    className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all ${selectedLogo ? 'bg-[var(--theme-primary)] text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:-translate-y-0.5' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                >
+                    Continue to Campaigns
+                    <ArrowRight className="w-4 h-4" />
+                </button>
            </div>
         </div>
       </div>
     );
+  };
+
+  const renderCreateCampaigns = () => {
+      if (!campaignData) return null;
+
+      return (
+          <div className="space-y-8 pb-10">
+              {/* File Status */}
+              {campaignData.uploadedFileName && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-500 text-white rounded-full flex items-center justify-center">
+                          <Check className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-blue-900">{campaignData.uploadedFileName}</h4>
+                          <p className="text-xs text-blue-700">
+                              {campaignData.isAnalyzing ? "Analyzing with Gemini 3 Pro..." : "Analysis complete"}
+                          </p>
+                      </div>
+                  </div>
+              )}
+
+              {/* Quotes Selection */}
+              {campaignData.extractedQuotes.length > 0 && (
+                  <div>
+                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Select a Quote to Visualize</h3>
+                      <div className="space-y-3">
+                          {campaignData.extractedQuotes.map((quote, idx) => (
+                              <div 
+                                  key={idx} 
+                                  onClick={() => onGenerateSocialPost?.(quote)}
+                                  className="p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-400 hover:shadow-md cursor-pointer transition-all group"
+                              >
+                                  <p className="text-slate-700 italic mb-2">"{quote}"</p>
+                                  <div className="flex items-center gap-2 text-xs text-blue-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Palette className="w-3 h-3" />
+                                      Generate Social Post
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
+
+              {/* Generated Images */}
+              {campaignData.generatedImages.length > 0 && (
+                  <div>
+                      <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">Ready to Share</h3>
+                      <div className="grid grid-cols-1 gap-6">
+                          {campaignData.generatedImages.map((img, idx) => (
+                              <div key={idx} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                  <img src={img} alt="Social Post" className="w-full rounded-lg shadow-md mb-4" />
+                                  <div className="flex justify-between items-center">
+                                      <span className="text-xs text-slate-400">Generated by Imagen 3</span>
+                                      <button className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-medium rounded-lg hover:bg-slate-800">
+                                          <Download className="w-3 h-3" />
+                                          Download
+                                      </button>
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
+              
+              {campaignData.isGenerating && (
+                  <div className="flex items-center justify-center p-8 text-slate-500 gap-3">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                      Creating your masterpiece...
+                  </div>
+              )}
+          </div>
+      );
   };
 
   const renderIncorporationHelp = () => (
@@ -282,7 +421,58 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({ currentStep, browserUrl, 
     </div>
   );
 
-  const renderDefaultResource = () => (
+  const renderDefaultResource = () => {
+    // Priority 1: Show screenshot if available
+    if (screenshot) {
+        return (
+            <div className="flex flex-col h-full">
+                <div className="flex-1 w-full h-full overflow-auto rounded-lg shadow-sm bg-slate-50 p-4">
+                    <div className="mb-2 text-sm font-semibold text-slate-700 flex items-center gap-2">
+                        📸 Screen Share - What Gemma Sees
+                    </div>
+                    <img
+                        src={screenshot}
+                        alt="Shared screenshot"
+                        className="w-full rounded-lg shadow-md border border-slate-200"
+                    />
+                </div>
+            </div>
+        );
+    }
+
+    // Priority 2: Show iframe if browserUrl is set
+    if (browserUrl) {
+        return (
+            <div className="flex flex-col h-full">
+                <div className="flex-1 w-full h-full overflow-hidden rounded-lg shadow-sm relative bg-white">
+                    <iframe
+                        src={browserUrl}
+                        className="absolute top-0 left-0 border-0"
+                        style={{
+                            width: '153.8%', // 100 / 0.65
+                            height: '153.8%',
+                            transform: 'scale(0.65)',
+                            transformOrigin: '0 0'
+                        }}
+                        title="Browser View"
+                        sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                    />
+                </div>
+                <div className="mt-2 text-center">
+                    <a
+                        href={browserUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-500 hover:underline flex items-center justify-center gap-1"
+                    >
+                        Open in new tab <ExternalLink className="w-3 h-3" />
+                    </a>
+                </div>
+            </div>
+        );
+    }
+
+    return (
     <div className="flex flex-col items-center justify-center h-full text-center p-8">
         <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center mb-6">
             <Globe className="w-8 h-8" />
@@ -312,6 +502,7 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({ currentStep, browserUrl, 
         )}
     </div>
   );
+  };
 
   return (
     <div className="flex flex-col h-full bg-slate-50/50">
@@ -331,7 +522,9 @@ const BrowserWindow: React.FC<BrowserWindowProps> = ({ currentStep, browserUrl, 
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto p-6">
-        {currentStep === Step.Branding || currentStep === Step.BrandIdentity ? renderBranding() :
+        {currentStep === Step.BoardFormation ? <OrgChart boardMembers={boardMembers} /> :
+         currentStep === Step.Branding || currentStep === Step.BrandIdentity ? renderBranding() :
+         currentStep === Step.CreateCampaigns ? renderCreateCampaigns() :
          currentStep === Step.Incorporation ? renderIncorporationHelp() :
          (currentStep >= Step.MeasureDashboard && currentStep <= Step.CustomReports) ? renderMeasureDashboard() :
          renderDefaultResource()}

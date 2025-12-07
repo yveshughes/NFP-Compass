@@ -10,8 +10,8 @@ const client = new ElevenLabsClient({
   apiKey: API_KEY
 });
 
-export const playTextToSpeech = async (text: string, voiceId: string = "hA4zGnmTwX2NQiTRMt7o"): Promise<void> => {
-  if (!API_KEY) return;
+export const playTextToSpeech = async (text: string, voiceId: string = "uYXf8XasLslADfZ2MB4u"): Promise<HTMLAudioElement | undefined> => {
+  if (!API_KEY) return undefined;
 
   try {
     const audioStream = await client.textToSpeech.convert(voiceId, {
@@ -35,7 +35,9 @@ export const playTextToSpeech = async (text: string, voiceId: string = "hA4zGnmT
     const audio = new Audio(url);
     
     await audio.play();
+    return audio;
   } catch (error) {
     console.error("Error playing text to speech:", error);
+    throw error;
   }
 };

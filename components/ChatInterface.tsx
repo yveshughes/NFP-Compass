@@ -1,19 +1,21 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { Message } from '../types';
-import { Send, Bot, Loader2, Mic, CameraOff, MessageSquare, Headphones, Eye, Aperture, X, Play } from 'lucide-react';
+import { Send, Bot, Loader2, Mic, CameraOff, MessageSquare, Headphones, Eye, Aperture, X, Play, Monitor, Paperclip } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { playTextToSpeech } from '../services/elevenLabsService';
 
 interface ChatInterfaceProps {
   messages: Message[];
   isLoading: boolean;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string, image?: string) => void;
+  onNavigate?: (url: string) => void;
+  onFileUpload?: (file: File) => void;
 }
 
-type ChatMode = 'text' | 'voice' | 'vision';
+type ChatMode = 'text' | 'voice' | 'vision' | 'screen';
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSendMessage }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSendMessage, onNavigate, onFileUpload }) => {
   const [mode, setMode] = useState<ChatMode>('text');
   const [inputText, setInputText] = useState('');
   
@@ -54,13 +56,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
         stopMediaStream();
         setIsCameraOn(false);
     }
-    
-    // When switching INTO vision, auto-start camera
-    if (mode === 'vision') {
-        stopMediaStream(); // Reset first
-        setIsCameraOn(false);
-        toggleCamera(visionVideoRef);
-    }
 
     // When switching OUT of voice, stop listening/speaking and reset session
     if (mode !== 'voice') {
@@ -83,13 +78,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
   // --- ELEVENLABS INTEGRATION ---
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
-    if (mode === 'voice' && lastMessage && lastMessage.role === 'model' && lastMessage.id !== lastSpokenMessageId && !isLoading) {
-        playTextToSpeech(lastMessage.text);
+    if (mode === 'voice' && voiceSessionStarted && lastMessage && lastMessage.role === 'model' && lastMessage.id !== lastSpokenMessageId && !isLoading) {
+        const playResponse = async () => {
+            const audio = await playTextToSpeech(lastMessage.text);
+            if (audio) {
+                audio.onended = () => {
+                    if (recognitionRef.current) {
+                        try {
+                            recognitionRef.current.start();
+                            setIsListening(true);
+                        } catch (e) {
+                            console.error("Failed to auto-start recognition", e);
+                        }
+                    }
+                };
+            }
+        };
+        playResponse();
         setLastSpokenMessageId(lastMessage.id);
     }
-  }, [messages, mode, isLoading, lastSpokenMessageId]);
+  }, [messages, mode, isLoading, lastSpokenMessageId, voiceSessionStarted]);
 
-  // --- SPEECH RECOGNITION ---
   // --- SPEECH RECOGNITION ---
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -101,7 +110,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
 
         recognition.onresult = (event: any) => {
             const transcript = event.results[0][0].transcript;
-            
+
             if (mode === 'voice') {
                 // In voice mode, auto-send
                 onSendMessage(transcript);
@@ -123,7 +132,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
 
         recognitionRef.current = recognition;
     }
-  }, [mode, onSendMessage]);
+  }, [mode]);
 
   const toggleListening = () => {
     if (!recognitionRef.current) {
@@ -133,24 +142,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
     if (isListening) {
         recognitionRef.current.stop();
         setIsListening(false);
-  const speakGreeting = () => {
-    const text = "Hi! I'm Gemma. I'm ready to help you build your non-profit. What's on your mind?";
-    playTextToSpeech(text);
-  };    // Simple voice selection preference
-        const voices = window.speechSynthesis.getVoices();
-        const preferredVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Female'));
-        if (preferredVoice) utterance.voice = preferredVoice;
-        
-        utterance.rate = 1.05;
-        utterance.pitch = 1.0;
-        
-        window.speechSynthesis.speak(utterance);
+    } else {
+        try {
+            recognitionRef.current.start();
+            setIsListening(true);
+        } catch (e) {
+            console.error("Failed to start recognition", e);
+        }
     }
   };
 
   const handleStartVoiceSession = () => {
       setVoiceSessionStarted(true);
-      speakGreeting();
       // Delay listening slightly to let the greeting start
       setTimeout(() => {
         if (!isListening) toggleListening();
@@ -188,37 +191,82 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onFileUpload) {
+      onFileUpload(file);
+      // Reset the input
+      e.target.value = '';
+    }
+  };
+
   // --- VIEW: TEXT MODE ---
   const renderTextMode = () => (
     <>
       <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide pb-6">
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            {msg.role === 'model' && (
-              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-1">
-                <Bot className="w-5 h-5 text-[var(--theme-primary)]" />
-              </div>
-            )}
-            <div className={`max-w-[85%] rounded-2xl px-5 py-3.5 shadow-sm text-sm leading-relaxed ${
-                msg.role === 'user' ? 'text-white rounded-br-none' : 'bg-slate-100 text-slate-800 rounded-bl-none prose prose-sm prose-blue max-w-none'
-              }`}
-              style={msg.role === 'user' ? { backgroundColor: 'var(--theme-primary)' } : {}}
-            >
-              {msg.role === 'user' ? (
-                <div>{msg.text}</div>
-              ) : (
-                <ReactMarkdown components={{
-                        h1: ({node, ...props}) => <h1 className="text-lg font-bold mt-2 mb-1" {...props} />,
-                        ul: ({node, ...props}) => <ul className="list-disc pl-4 space-y-1 mb-2" {...props} />,
-                        a: ({node, ...props}) => <a className="text-[var(--theme-primary)] hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
-                    }}
+        {messages.map((msg, index) => {
+          const isLastMessage = index === messages.length - 1;
+          const shouldShowShareButton = msg.role === 'model' && isLastMessage && !isLoading &&
+            (msg.text.toLowerCase().includes('share screen') || msg.text.toLowerCase().includes('📸'));
+
+          return (
+            <div key={msg.id}>
+              <div className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                {msg.role === 'model' && (
+                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-1">
+                    <Bot className="w-5 h-5 text-[var(--theme-primary)]" />
+                  </div>
+                )}
+                <div className={`max-w-[85%] rounded-2xl px-5 py-3.5 shadow-sm text-sm leading-relaxed ${
+                    msg.role === 'user' ? 'text-white rounded-br-none' : 'bg-slate-100 text-slate-800 rounded-bl-none prose prose-sm prose-blue max-w-none'
+                  }`}
+                  style={msg.role === 'user' ? { backgroundColor: 'var(--theme-primary)' } : {}}
                 >
-                    {msg.text}
-                </ReactMarkdown>
+                  {msg.role === 'user' ? (
+                    <div>{msg.text}</div>
+                  ) : (
+                    <ReactMarkdown components={{
+                            h1: ({node, ...props}) => <h1 className="text-lg font-bold mt-2 mb-1" {...props} />,
+                            ul: ({node, ...props}) => <ul className="list-disc pl-4 space-y-1 mb-2" {...props} />,
+                            a: ({node, href, ...props}) => (
+                              <a
+                                href={href}
+                                className="text-[var(--theme-primary)] hover:underline cursor-pointer"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  if (href && onNavigate) {
+                                    onNavigate(href);
+                                  }
+                                }}
+                                title={href}
+                                {...props}
+                              />
+                            ),
+                        }}
+                    >
+                        {msg.text}
+                    </ReactMarkdown>
+                  )}
+                </div>
+              </div>
+
+              {/* Share Screen Button After Last Gemma Message */}
+              {shouldShowShareButton && (
+                <div className="flex gap-4 mt-3 ml-12">
+                  <button
+                    onClick={captureScreen}
+                    disabled={isLoading}
+                    className="px-4 py-2.5 rounded-xl shadow-md font-semibold text-sm flex items-center gap-2 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ backgroundColor: 'var(--theme-primary)', color: 'white' }}
+                  >
+                    <Monitor className="w-4 h-4" />
+                    📸 Share Screen
+                  </button>
+                </div>
               )}
             </div>
-          </div>
-        ))}
+          );
+        })}
         {isLoading && (
           <div className="flex gap-4">
              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
@@ -235,6 +283,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
 
       <div className="p-4 border-t border-slate-100 bg-white z-10">
         <form onSubmit={handleSubmit} className="flex gap-2 items-center bg-slate-50 p-2 rounded-xl border border-slate-200 focus-within:ring-2 focus-within:ring-[var(--theme-primary-dim)] transition-all h-[54px]" style={{borderColor: 'transparent'}}>
+          {onFileUpload && (
+            <label className="p-2.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer shrink-0">
+              <Paperclip className="w-4 h-4" />
+              <input
+                type="file"
+                className="hidden"
+                accept="image/*,.pdf,.doc,.docx"
+                onChange={handleFileSelect}
+                disabled={isLoading}
+              />
+            </label>
+          )}
           <input
             type="text"
             className="flex-1 bg-transparent border-none focus:ring-0 text-sm text-slate-800 px-3 h-full"
@@ -243,9 +303,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
             onChange={(e) => setInputText(e.target.value)}
             disabled={isLoading}
           />
-          <button 
-            type="submit" 
-            disabled={!inputText.trim() || isLoading} 
+          <button
+            type="submit"
+            disabled={!inputText.trim() || isLoading}
             className="p-2.5 text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-colors shrink-0"
             style={{ backgroundColor: 'var(--theme-primary)' }}
           >
@@ -311,21 +371,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                         </>
                     ) : (
                         <span className="text-slate-400 text-sm font-medium tracking-wide">
-                            {isLoading ? "GEMMA IS THINKING..." : "TAP TO SPEAK"}
+                            {isLoading ? "GEMMA IS THINKING..." : "LISTENING..."}
                         </span>
                     )}
                 </div>
 
-                <button
-                    onClick={toggleListening}
-                    className={`w-16 h-16 rounded-full flex items-center justify-center transition-all transform hover:scale-105 ${
-                        isListening 
-                        ? 'bg-red-500 hover:bg-red-600 shadow-[0_0_30px_rgba(239,68,68,0.4)]' 
-                        : 'bg-white hover:bg-slate-100 shadow-[0_0_30px_rgba(255,255,255,0.1)]'
-                    }`}
-                >
-                    {isListening ? <Mic className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-slate-900" />}
-                </button>
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
+                    isListening
+                    ? 'bg-red-500 shadow-[0_0_30px_rgba(239,68,68,0.4)]'
+                    : 'bg-white/20 shadow-[0_0_30px_rgba(255,255,255,0.1)]'
+                }`}>
+                    <Mic className={`w-6 h-6 ${isListening ? 'text-white' : 'text-white/60'}`} />
+                </div>
             </div>
         )}
 
@@ -344,85 +401,181 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
     </div>
   );
 
-  // --- VIEW: VISION MODE ---
+  // --- VIEW: VISION MODE (Camera) ---
   const renderVisionMode = () => (
-    <div className="flex-1 bg-black relative flex flex-col">
-        {/* Camera Feed */}
+    <div className="flex-1 bg-gradient-to-br from-slate-900 to-slate-800 relative flex flex-col">
+        {/* Video Feed or Placeholder */}
         <div className="flex-1 relative overflow-hidden flex items-center justify-center">
             {isCameraOn ? (
-                <video 
-                    ref={visionVideoRef} 
-                    autoPlay 
-                    playsInline 
-                    muted 
-                    className="w-full h-full object-cover transform -scale-x-100 opacity-90"
+                <video
+                    ref={visionVideoRef}
+                    autoPlay
+                    playsInline
+                    className="max-w-full max-h-full object-contain rounded-xl"
                 />
             ) : (
-                <div className="text-slate-500 flex flex-col items-center">
-                    <CameraOff className="w-12 h-12 mb-4 opacity-50" />
-                    <p>Camera is off</p>
-                    <button onClick={() => toggleCamera(visionVideoRef)} className="mt-4 px-4 py-2 bg-slate-800 rounded text-sm hover:bg-slate-700">Turn On</button>
+                <div className="text-center max-w-md px-8">
+                    <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-white/10 flex items-center justify-center">
+                        <Eye className="w-10 h-10 text-white" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-4">Vision Mode</h3>
+                    <p className="text-slate-300 mb-6">
+                        Show Gemma your documents, designs, or anything visual for real-time feedback.
+                    </p>
+                    <div className="space-y-3 text-sm text-slate-400 text-left bg-white/5 rounded-lg p-4">
+                        <div className="flex gap-3">
+                            <span className="text-lg">1️⃣</span>
+                            <p>Turn on your camera below</p>
+                        </div>
+                        <div className="flex gap-3">
+                            <span className="text-lg">2️⃣</span>
+                            <p>Show Gemma what you want feedback on</p>
+                        </div>
+                        <div className="flex gap-3">
+                            <span className="text-lg">3️⃣</span>
+                            <p>Capture and get instant analysis</p>
+                        </div>
+                    </div>
                 </div>
             )}
-            
-            {/* Overlay UI */}
-            <div className="absolute inset-0 pointer-events-none border-[20px] border-slate-900/50">
-                <div className="w-full h-full border-2 border-white/20 relative">
-                     <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4" style={{borderColor: 'var(--theme-primary)'}}></div>
-                     <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4" style={{borderColor: 'var(--theme-primary)'}}></div>
-                     <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4" style={{borderColor: 'var(--theme-primary)'}}></div>
-                     <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4" style={{borderColor: 'var(--theme-primary)'}}></div>
+        </div>
+
+        {/* Vision Controls */}
+        <div className="h-24 bg-slate-900/50 backdrop-blur flex items-center justify-center gap-8 border-t border-slate-700 shrink-0">
+             <button
+                onClick={() => toggleCamera(visionVideoRef)}
+                className={`px-6 py-3 rounded-full font-semibold flex items-center gap-2 hover:scale-105 active:scale-95 transition-transform ${
+                    isCameraOn ? 'bg-red-500 text-white' : 'bg-white text-slate-900'
+                }`}
+             >
+                {isCameraOn ? <CameraOff className="w-5 h-5" /> : <Aperture className="w-5 h-5" />}
+                {isCameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
+             </button>
+        </div>
+    </div>
+  );
+
+  // --- VIEW: SCREEN SHARE MODE ---
+  const captureScreen = async () => {
+    try {
+      // Request screen capture
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { mediaSource: 'screen' }
+      });
+
+      // Create video element to capture frame
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.play();
+
+      // Wait for video to be ready
+      await new Promise(resolve => {
+        video.onloadedmetadata = resolve;
+      });
+
+      // Create canvas and capture frame
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(video, 0, 0);
+
+      // Convert to base64
+      const imageData = canvas.toDataURL('image/png');
+
+      // Stop the stream
+      stream.getTracks().forEach(track => track.stop());
+
+      // Send to Gemini with the screenshot
+      onSendMessage("What do I need to fill out on this page? Guide me through each field.", imageData);
+
+    } catch (error) {
+      console.error('Screen capture failed:', error);
+      alert('Screen capture was cancelled or failed. Please try again.');
+    }
+  };
+
+  const renderScreenMode = () => (
+    <div className="flex-1 bg-gradient-to-br from-slate-900 to-slate-800 relative flex flex-col">
+        {/* Screen Share Instructions */}
+        <div className="flex-1 relative overflow-hidden flex items-center justify-center p-8">
+            <div className="text-center max-w-md">
+                <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-white/10 flex items-center justify-center">
+                    <Monitor className="w-10 h-10 text-white" />
+                </div>
+                <h3 className="text-2xl font-bold text-white mb-4">Screen Share Mode</h3>
+                <p className="text-slate-300 mb-6">
+                    Share your screen with Gemma to get guidance on filling out forms, navigating websites, or understanding documents.
+                </p>
+                <div className="space-y-3 text-sm text-slate-400 text-left bg-white/5 rounded-lg p-4">
+                    <div className="flex gap-3">
+                        <span className="text-lg">1️⃣</span>
+                        <p>Click "Capture Screen" below</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <span className="text-lg">2️⃣</span>
+                        <p>Select the browser tab or window with the form</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <span className="text-lg">3️⃣</span>
+                        <p>Gemma will analyze and guide you through filling it out</p>
+                    </div>
                 </div>
             </div>
         </div>
 
-        {/* Vision Controls */}
-        <div className="h-24 bg-slate-900 flex items-center justify-center gap-8 border-t border-slate-800 shrink-0">
-             <button onClick={() => { stopMediaStream(); setIsCameraOn(false); }} className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-slate-700 hover:text-white">
-                <X className="w-5 h-5" />
-             </button>
-
-             <button 
-                onClick={() => onSendMessage("I've analyzed this visual context.")} // Placeholder for real vision API
-                className="w-16 h-16 rounded-full bg-white border-4 border-slate-300 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+        {/* Screen Share Controls */}
+        <div className="h-24 bg-slate-900/50 backdrop-blur flex items-center justify-center gap-8 border-t border-slate-700 shrink-0">
+             <button
+                onClick={captureScreen}
+                disabled={isLoading}
+                className="px-6 py-3 rounded-full bg-white text-slate-900 font-semibold flex items-center gap-2 hover:scale-105 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: 'var(--theme-primary)', color: 'white' }}
              >
-                <Aperture className="w-8 h-8" style={{ color: 'var(--theme-primary)' }} />
+                <Monitor className="w-5 h-5" />
+                Capture Screen
              </button>
-
-             <div className="w-12 h-12"></div> {/* Spacer for balance */}
         </div>
     </div>
   );
 
   return (
     <div className="flex flex-col h-full bg-white relative">
-      
+
       {/* Top Tabs (Segmented Control) */}
       <div className="px-4 py-3 bg-white border-b border-slate-100 flex items-center justify-center shrink-0">
         <div className="flex bg-slate-100/80 p-1 rounded-lg">
-            <button 
-                onClick={() => setMode('text')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${mode === 'text' ? 'bg-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                style={mode === 'text' ? { color: 'var(--theme-primary)' } : {}}
-            >
-                <MessageSquare className="w-4 h-4" />
-                Text
-            </button>
-            <button 
+            <button
                 onClick={() => setMode('voice')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${mode === 'voice' ? 'bg-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${mode === 'voice' ? 'bg-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 style={mode === 'voice' ? { color: 'var(--theme-primary)' } : {}}
             >
-                <Headphones className="w-4 h-4" />
+                <Headphones className="w-3.5 h-3.5" />
                 Voice
             </button>
-            <button 
+            <button
+                onClick={() => setMode('text')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${mode === 'text' ? 'bg-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                style={mode === 'text' ? { color: 'var(--theme-primary)' } : {}}
+            >
+                <MessageSquare className="w-3.5 h-3.5" />
+                Text
+            </button>
+            <button
                 onClick={() => setMode('vision')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${mode === 'vision' ? 'bg-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${mode === 'vision' ? 'bg-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 style={mode === 'vision' ? { color: 'var(--theme-primary)' } : {}}
             >
-                <Eye className="w-4 h-4" />
+                <Eye className="w-3.5 h-3.5" />
                 Vision
+            </button>
+            <button
+                onClick={() => setMode('screen')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${mode === 'screen' ? 'bg-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                style={mode === 'screen' ? { color: 'var(--theme-primary)' } : {}}
+            >
+                <Monitor className="w-3.5 h-3.5" />
+                Screen
             </button>
         </div>
       </div>
@@ -431,6 +584,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
       {mode === 'text' && renderTextMode()}
       {mode === 'voice' && renderVoiceMode()}
       {mode === 'vision' && renderVisionMode()}
+      {mode === 'screen' && renderScreenMode()}
 
     </div>
   );

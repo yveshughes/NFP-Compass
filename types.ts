@@ -22,6 +22,7 @@ export enum Step {
 
   // --- PROMOTE (100-199) ---
   BrandIdentity = 100,
+  CreateCampaigns = 105,
   OnlinePresence = 101,
   AcceptDonations = 102,
   Fundraising = 103,
@@ -67,6 +68,14 @@ export interface Organization {
   initials: string;
 }
 
+export interface BoardMember {
+  name: string;
+  title: 'President' | 'Secretary' | 'Treasurer' | 'Director';
+  photoUrl?: string;
+  linkedInUrl?: string;
+  headline?: string;
+}
+
 export interface AppState {
   currentSection: AppSection;
   currentStep: Step;
@@ -76,4 +85,17 @@ export interface AppState {
   brandingData: BrandingData | null;
   supplementalProvisionText: string | null;
   activeOrg: Organization | null;
+  screenshot: string | null;
+  boardMembers: BoardMember[];
+  generatedLogo: string | null;
+  campaignData: CampaignData;
+  orgName: string;
+}
+
+export interface CampaignData {
+  uploadedFileName: string | null;
+  extractedQuotes: string[];
+  generatedImages: string[];
+  isAnalyzing: boolean;
+  isGenerating: boolean;
 }
