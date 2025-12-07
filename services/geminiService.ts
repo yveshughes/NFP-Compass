@@ -71,6 +71,26 @@ export const initializeChat = (): Chat => {
               },
               required: ["orgName", "primaryColor", "logoStyle"]
             }
+          },
+          {
+            name: "navigate_to_step",
+            description: "Navigates the user to a specific section and step in the app. Use this when user's intent requires a different section. For example, if they want to create campaigns/ads, navigate to Promote > Create Campaigns.",
+            parameters: {
+              type: "OBJECT",
+              properties: {
+                section: {
+                  type: "STRING",
+                  description: "App section to navigate to",
+                  enum: ["Incorporate", "Promote", "Manage", "Measure"]
+                },
+                step: {
+                  type: "STRING",
+                  description: "Specific step within the section",
+                  enum: ["MissionName", "BoardFormation", "Incorporation", "EINIssuance", "Bylaws", "FederalFiling", "StateExemption", "BrandIdentity", "CreateCampaigns", "OnlinePresence", "AcceptDonations", "Fundraising", "GrantSearch", "MeasureDashboard"]
+                }
+              },
+              required: ["section", "step"]
+            }
           }
         ]
       }]
@@ -86,7 +106,8 @@ export const sendMessageToGemini = async (
   imageData?: string,
   onAddBoardMember?: (member: BoardMember) => void,
   onSetOrgName?: (name: string) => void,
-  onGenerateBrandedLetter?: (imageUrl: string) => Promise<void>
+  onGenerateBrandedLetter?: (imageUrl: string) => Promise<void>,
+  onNavigateToStep?: (section: string, step: string) => void
 ): Promise<string> => {
   if (!chatSession) {
     initializeChat();
@@ -102,12 +123,13 @@ export const sendMessageToGemini = async (
 
     // If image data is provided, send as multimodal message
     if (imageData) {
-      // Extract base64 data (remove data:image/png;base64, prefix)
+      // Extract base64 data and mime type from data URL
       const base64Data = imageData.split(',')[1];
+      const mimeType = imageData.substring(imageData.indexOf(':') + 1, imageData.indexOf(';'));
       messageContent = {
         parts: [
           { text: message },
-          { inlineData: { mimeType: 'image/png', data: base64Data } }
+          { inlineData: { mimeType, data: base64Data } }
         ]
       };
     }
@@ -182,6 +204,24 @@ export const sendMessageToGemini = async (
                         name: 'set_org_name',
                         response: {
                             result: `Organization name set to "${orgName}". UI updated.`
+                        }
+                    }
+                });
+            }
+
+            if (call && call.name === 'navigate_to_step') {
+                const section = call.args?.section as string;
+                const step = call.args?.step as string;
+                console.log(`Navigating to: ${section} > ${step}`);
+
+                // Navigate to the step via callback
+                if (onNavigateToStep) onNavigateToStep(section, step);
+
+                toolResponses.push({
+                    functionResponse: {
+                        name: 'navigate_to_step',
+                        response: {
+                            result: `Navigated to ${section} > ${step}`
                         }
                     }
                 });

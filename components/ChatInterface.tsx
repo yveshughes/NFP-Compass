@@ -406,18 +406,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
     const video = visionVideoRef.current;
     if (!video) return;
 
-    // Create canvas to capture frame
+    // Create canvas to capture frame at reduced resolution to prevent freezing
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // Limit size to 800px max width to reduce base64 size
+    const maxWidth = 800;
+    const scale = Math.min(1, maxWidth / video.videoWidth);
+    canvas.width = video.videoWidth * scale;
+    canvas.height = video.videoHeight * scale;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Draw current video frame
-    ctx.drawImage(video, 0, 0);
+    // Draw current video frame at scaled size
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Convert to base64 PNG (keep full data URL for geminiService to process)
-    const base64Image = canvas.toDataURL('image/png');
+    // Convert to base64 JPEG with quality 0.8 (much smaller than PNG)
+    const base64Image = canvas.toDataURL('image/jpeg', 0.8);
 
     // Send to Gemini with general prompt - let user type what they want
     onSendMessage(

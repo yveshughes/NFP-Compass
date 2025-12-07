@@ -8,9 +8,9 @@ interface OrgChartProps {
 
 const OrgChart: React.FC<OrgChartProps> = ({ boardMembers }) => {
   // Skeleton positions to show when empty
-  const renderSkeletonCard = (title: string, isRequired: boolean = true) => (
+  const renderSkeletonCard = (title: string, isRequired: boolean = true, index: number = 0) => (
     <div
-      key={title}
+      key={`${title}-${index}`}
       className="bg-slate-50 rounded-lg border-2 border-dashed border-slate-300 p-4 flex flex-col items-center text-center"
     >
       {/* Photo Placeholder */}
@@ -62,9 +62,9 @@ const OrgChart: React.FC<OrgChartProps> = ({ boardMembers }) => {
             <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">Optional</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {renderSkeletonCard('Director', false)}
-            {renderSkeletonCard('Director', false)}
-            {renderSkeletonCard('Director', false)}
+            {renderSkeletonCard('Director', false, 0)}
+            {renderSkeletonCard('Director', false, 1)}
+            {renderSkeletonCard('Director', false, 2)}
           </div>
         </div>
 

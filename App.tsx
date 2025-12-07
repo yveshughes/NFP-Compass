@@ -249,8 +249,11 @@ const App: React.FC = () => {
     }));
 
     try {
+        // Prepend org name context to every message for Gemini's awareness
+        const messageWithContext = `[ORG_NAME: ${state.orgName}]\n${text}`;
+
         const responseText = await sendMessageToGemini(
-            text,
+            messageWithContext,
             (url) => {
                 console.log("Navigating to:", url);
                 setState(prev => ({ ...prev, browserUrl: url }));
@@ -270,6 +273,39 @@ const App: React.FC = () => {
             async (imageUrl: string) => {
                 console.log("Generated branded letter image:", imageUrl);
                 setState(prev => ({ ...prev, generatedLogo: imageUrl }));
+            },
+            (section: string, step: string) => {
+                console.log(`Navigating to: ${section} > ${step}`);
+                // Map section string to AppSection enum
+                const sectionMap: { [key: string]: AppSection } = {
+                    'Incorporate': AppSection.Incorporate,
+                    'Promote': AppSection.Promote,
+                    'Manage': AppSection.Manage,
+                    'Measure': AppSection.Measure
+                };
+                // Map step string to Step enum
+                const stepMap: { [key: string]: Step } = {
+                    'MissionName': Step.MissionName,
+                    'BoardFormation': Step.BoardFormation,
+                    'Incorporation': Step.Incorporation,
+                    'EINIssuance': Step.EINIssuance,
+                    'Bylaws': Step.Bylaws,
+                    'FederalFiling': Step.FederalFiling,
+                    'StateExemption': Step.StateExemption,
+                    'BrandIdentity': Step.BrandIdentity,
+                    'CreateCampaigns': Step.CreateCampaigns,
+                    'OnlinePresence': Step.OnlinePresence,
+                    'AcceptDonations': Step.AcceptDonations,
+                    'Fundraising': Step.Fundraising,
+                    'GrantSearch': Step.GrantSearch,
+                    'MeasureDashboard': Step.MeasureDashboard
+                };
+
+                setState(prev => ({
+                    ...prev,
+                    currentSection: sectionMap[section] || prev.currentSection,
+                    currentStep: stepMap[step] || prev.currentStep
+                }));
             }
         );
         
