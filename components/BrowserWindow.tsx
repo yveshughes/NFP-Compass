@@ -4,7 +4,7 @@ import { Step, BrandingData, BoardMember, CampaignData } from '../types';
 import { STEPS_INFO } from '../constants';
 import { Globe, ArrowRight, ExternalLink, Copy, Check, Palette, Info, Construction, TrendingUp, Users, DollarSign, Download, BarChart3, Upload } from 'lucide-react';
 import OrgChart from './OrgChart';
-import stationaryImage from '../src/assets/stationary.jpeg';
+import stationaryImage from '/src/assets/stationary.jpeg';
 
 interface BrowserWindowProps {
   currentStep: Step;

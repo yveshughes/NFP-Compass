@@ -401,18 +401,49 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
     </div>
   );
 
+  // --- CAPTURE FROM WEBCAM ---
+  const captureFromWebcam = () => {
+    const video = visionVideoRef.current;
+    if (!video) return;
+
+    // Create canvas to capture frame
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Draw current video frame
+    ctx.drawImage(video, 0, 0);
+
+    // Convert to base64
+    const base64Image = canvas.toDataURL('image/jpeg').split(',')[1];
+
+    // Send to Gemini with general prompt - let user type what they want
+    onSendMessage(
+      "What do you see in this image?",
+      base64Image
+    );
+  };
+
   // --- VIEW: VISION MODE (Camera) ---
   const renderVisionMode = () => (
     <div className="flex-1 bg-gradient-to-br from-slate-900 to-slate-800 relative flex flex-col">
         {/* Video Feed or Placeholder */}
         <div className="flex-1 relative overflow-hidden flex items-center justify-center">
             {isCameraOn ? (
-                <video
-                    ref={visionVideoRef}
-                    autoPlay
-                    playsInline
-                    className="max-w-full max-h-full object-contain rounded-xl"
-                />
+                <div className="relative w-full h-full flex items-center justify-center">
+                    <video
+                        ref={visionVideoRef}
+                        autoPlay
+                        playsInline
+                        className="max-w-full max-h-full object-contain rounded-xl"
+                    />
+                    {/* Capture hint overlay */}
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur px-4 py-2 rounded-full text-white text-sm animate-pulse">
+                        📸 Show Gemma what you want to discuss, then click Capture
+                    </div>
+                </div>
             ) : (
                 <div className="text-center max-w-md px-8">
                     <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-white/10 flex items-center justify-center">
@@ -420,7 +451,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                     </div>
                     <h3 className="text-2xl font-bold text-white mb-4">Vision Mode</h3>
                     <p className="text-slate-300 mb-6">
-                        Show Gemma your documents, designs, or anything visual for real-time feedback.
+                        Show Gemma documents, designs, products, or anything visual for real-time analysis and feedback.
                     </p>
                     <div className="space-y-3 text-sm text-slate-400 text-left bg-white/5 rounded-lg p-4">
                         <div className="flex gap-3">
@@ -429,11 +460,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                         </div>
                         <div className="flex gap-3">
                             <span className="text-lg">2️⃣</span>
-                            <p>Show Gemma what you want feedback on</p>
+                            <p>Show Gemma what you want to discuss</p>
                         </div>
                         <div className="flex gap-3">
                             <span className="text-lg">3️⃣</span>
-                            <p>Capture and get instant analysis</p>
+                            <p>Click Capture and then type your question</p>
                         </div>
                     </div>
                 </div>
@@ -441,7 +472,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
         </div>
 
         {/* Vision Controls */}
-        <div className="h-24 bg-slate-900/50 backdrop-blur flex items-center justify-center gap-8 border-t border-slate-700 shrink-0">
+        <div className="h-24 bg-slate-900/50 backdrop-blur flex items-center justify-center gap-4 border-t border-slate-700 shrink-0">
              <button
                 onClick={() => toggleCamera(visionVideoRef)}
                 className={`px-6 py-3 rounded-full font-semibold flex items-center gap-2 hover:scale-105 active:scale-95 transition-transform ${
@@ -451,6 +482,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isLoading, onSe
                 {isCameraOn ? <CameraOff className="w-5 h-5" /> : <Aperture className="w-5 h-5" />}
                 {isCameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
              </button>
+
+             {isCameraOn && (
+                <button
+                    onClick={captureFromWebcam}
+                    disabled={isLoading}
+                    className="px-8 py-3 rounded-full font-semibold flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:scale-105 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/50"
+                >
+                    <Aperture className="w-5 h-5" />
+                    {isLoading ? 'Analyzing...' : 'Capture'}
+                </button>
+             )}
         </div>
     </div>
   );

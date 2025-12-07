@@ -9,8 +9,14 @@ import BrowserWindow from './components/BrowserWindow';
 import LandingPage from './components/LandingPage';
 import TopNavigation from './components/TopNavigation';
 import { INITIAL_GREETING, MOCK_ORGS } from './constants';
+import TestDatabase from './test-db';
 
 const App: React.FC = () => {
+  // TEMPORARY: Show database test page
+  const showDbTest = new URLSearchParams(window.location.search).get('test') === 'db';
+  if (showDbTest) {
+    return <TestDatabase />;
+  }
   const [hasLaunched, setHasLaunched] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [chatWidth, setChatWidth] = useState(50); // Percentage
